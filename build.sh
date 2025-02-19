@@ -16,6 +16,11 @@ echo "Build date: ${BUILD_DATE}"
 go mod tidy
 
 # Build the binary
-CGO_ENABLED=0 go install -ldflags "-s -w -X github.com/janfonas/kafka-admin-cli/cmd.version=${VERSION} -X github.com/janfonas/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT} -X github.com/janfonas/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}" && cp $(go env GOPATH)/bin/kafka-admin-cli ./kac
+go build \
+  -ldflags="-s -w \
+  -X 'github.com/janfonas/kafka-admin-cli/cmd.version=${VERSION}' \
+  -X 'github.com/janfonas/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT}' \
+  -X 'github.com/janfonas/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}'" \
+  -o kac
 
 echo "Build complete: $(pwd)/kac"
