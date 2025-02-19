@@ -9,15 +9,10 @@ GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M:%S')
 
 # Build flags
-BUILD_FLAGS=(
-    "-o"
-    "kac"
-    "-ldflags"
-    "-s -w \
-    -X github.com/janfonas/kafka-admin-cli/cmd.version=${VERSION} \
-    -X github.com/janfonas/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT} \
-    -X github.com/janfonas/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}"
-)
+LDFLAGS="-s -w"
+LDFLAGS="${LDFLAGS} -X github.com/janfonas/kafka-admin-cli/cmd.version=${VERSION}"
+LDFLAGS="${LDFLAGS} -X github.com/janfonas/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT}"
+LDFLAGS="${LDFLAGS} -X github.com/janfonas/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}"
 
 echo "Building kac version ${VERSION}..."
 echo "Git commit: ${GIT_COMMIT}"
@@ -27,6 +22,6 @@ echo "Build date: ${BUILD_DATE}"
 go mod tidy
 
 # Build the binary
-CGO_ENABLED=0 go build "${BUILD_FLAGS[@]}"
+CGO_ENABLED=0 go build -o kac -ldflags "${LDFLAGS}"
 
 echo "Build complete: $(pwd)/kac"
