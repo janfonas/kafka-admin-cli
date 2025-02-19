@@ -159,3 +159,8 @@ The build script (`build.sh`) provides:
 ## Credits
 
 Created by Jan Harald Fonås with the assistance of an LLM.
+
+### Built Using
+- [franz-go](https://github.com/twmb/franz-go) - A feature-complete, pure Go Kafka client
+- [cobra](https://github.com/spf13/cobra) - A library for creating powerful modern CLI applications
+- [kcat](https://github.com/edenhill/kcat) - Inspiration for the CLI design and functionality
