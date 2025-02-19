@@ -367,6 +367,7 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
+	// We are seeing timeouts calling the DescribeACLsRequest, so we will use the low-level API instead
 	fmt.Println("DEBUG: Starting ACL list operation...")
 
 	// Create a context with timeout
