@@ -83,6 +83,20 @@ kac --brokers kafka1:9092 --username alice --password secret --insecure topic li
 
 ## Command Reference
 
+### Commands
+
+#### Version
+```bash
+# Display version information
+kac version
+```
+Shows detailed version information including:
+- Version number
+- Git commit hash
+- Build date
+- Go version
+- OS/Architecture
+
 ### Global Flags
 - `--brokers, -b`: Kafka broker list (comma-separated)
 - `--username, -u`: SASL username
