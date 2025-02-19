@@ -1,88 +1,114 @@
-# Kafka Admin Client (kac)
+# Kafka Admin CLI (kac)
 
-A command-line interface for managing Apache Kafka topics and ACLs using the Franz-go Kafka client.
+A command-line interface for Apache Kafka administration, built with the Franz-go client library. Designed as a management companion to [kcat](https://github.com/edenhill/kcat), providing comprehensive tools for Kafka cluster administration.
 
-Written by Jan Harald Fonås with the help of an LLM.
+## Overview
 
-## Features
+`kac` provides a streamlined interface for managing:
+- Kafka Topics
+- Access Control Lists (ACLs)
+- Consumer Groups
 
-- Topic Management
-  - Create topics
-  - Delete topics
-  - List topics
-- ACL Management
-  - Create ACLs
-  - Delete ACLs
-  - List ACLs
-- Consumer Group Management
-  - List consumer groups
-  - Get consumer group details (members, assignments, offsets)
-  - Set consumer group offsets
+Built with security in mind, supporting SASL authentication and TLS encryption.
 
-## Installation
+## Quick Start
 
-### Option 1: Using go install
+### Installation
 
 ```bash
+# Using go install
 go install github.com/janfonas/kafka-admin-cli@latest
-```
 
-### Option 2: Building from source
-
-1. Clone the repository:
-```bash
+# Or build from source
 git clone https://github.com/janfonas/kafka-admin-cli.git
 cd kafka-admin-cli
-```
-
-2. Build the binary:
-```bash
 ./build.sh
 ```
 
-This will create a `kac` binary in the current directory. The build script:
-- Includes version information from git tags
-- Disables CGO for better portability
-- Strips debug information for smaller binary size
-- Runs `go mod tidy` to ensure dependencies are up to date
+### Basic Usage
 
-## Usage
-
-### Global Flags
-
-- `--brokers, -b`: Kafka broker list (comma-separated) (default: "localhost:9092")
-- `--username, -u`: SASL username
-- `--password, -w`: SASL password
-- `--ca-cert`: Path to CA certificate file for TLS connections
-- `--sasl-mechanism`: SASL mechanism (SCRAM-SHA-512 or PLAIN) (default: SCRAM-SHA-512)
-- `--insecure`: Skip TLS certificate verification
-
-### Topic Management
-
-Create a topic:
 ```bash
+# List topics
+kac topic list
+
+# Create a topic
 kac topic create mytopic --partitions 3 --replication-factor 1
+
+# Manage consumer groups
+kac consumergroup list
 ```
 
-Delete a topic:
+## Features
+
+### Topic Management
+- Create topics with custom partitions and replication factors
+- Delete topics
+- List all topics
+- View detailed topic configuration
+
+### ACL Management
+- Create and delete ACLs
+- List all ACLs
+- View detailed ACL information
+- Support for various resource types and operations
+
+### Consumer Group Management
+- List all consumer groups
+- View detailed consumer group information
+  - Member assignments
+  - Partition offsets
+  - Consumer lag
+- Modify consumer group offsets
+
+## Authentication and Security
+
+### Supported Authentication Methods
+- SASL/SCRAM-SHA-512 (default)
+- SASL/PLAIN
+- TLS with custom CA certificates
+- TLS with self-signed certificates
+
+### Security Options
 ```bash
+# SASL Authentication
+kac --brokers kafka1:9092 --username alice --password secret topic list
+
+# Custom CA Certificate
+kac --brokers kafka1:9092 --username alice --password secret \
+    --ca-cert /path/to/ca.crt topic list
+
+# Self-signed Certificates
+kac --brokers kafka1:9092 --username alice --password secret --insecure topic list
+```
+
+## Command Reference
+
+### Global Flags
+- `--brokers, -b`: Kafka broker list (comma-separated)
+- `--username, -u`: SASL username
+- `--password, -w`: SASL password
+- `--ca-cert`: CA certificate file path
+- `--sasl-mechanism`: Authentication mechanism (SCRAM-SHA-512 or PLAIN)
+- `--insecure`: Skip TLS certificate verification
+
+### Topic Commands
+```bash
+# Create topic
+kac topic create mytopic --partitions 6 --replication-factor 3
+
+# List topics
+kac topic list
+
+# Get topic details
+kac topic get mytopic
+
+# Delete topic
 kac topic delete mytopic
 ```
 
-List topics:
+### ACL Commands
 ```bash
-kac topic list
-```
-
-Get topic details:
-```bash
-kac topic get mytopic
-```
-
-### ACL Management
-
-Create an ACL:
-```bash
+# Create ACL
 kac acl create \
   --resource-type TOPIC \
   --resource-name mytopic \
@@ -90,104 +116,46 @@ kac acl create \
   --host "*" \
   --operation READ \
   --permission ALLOW
-```
 
-Delete an ACL:
-```bash
-kac acl delete \
-  --resource-type TOPIC \
-  --resource-name mytopic \
-  --principal User:alice \
-  --host "*" \
-  --operation READ \
-  --permission ALLOW
-```
-
-List ACLs:
-```bash
+# List ACLs
 kac acl list
-```
 
-Get ACL details:
-```bash
+# Get ACL details
 kac acl get \
   --resource-type TOPIC \
   --resource-name mytopic \
   --principal User:alice
-```
 
-## Authentication
-
-The CLI supports SCRAM-SHA-512 authentication and custom CA certificates for TLS connections. Provide your credentials and CA certificate using the global flags:
-
-```bash
-# Using SCRAM-SHA-512 authentication (default)
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret topic list
-
-# Using SASL/PLAIN authentication
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-mechanism PLAIN topic list
-
-# Using authentication with custom CA certificate
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-mechanism PLAIN --ca-cert /path/to/ca.crt topic list
-
-# Using authentication with self-signed certificates
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --insecure topic list
-```
-
-## Examples
-
-1. Create a topic with custom partitions and replication factor:
-```bash
-kac topic create orders --partitions 6 --replication-factor 3
-```
-
-2. Grant read access to a consumer group:
-```bash
-kac acl create \
-  --resource-type GROUP \
-  --resource-name mygroup \
-  --principal User:bob \
-  --host "*" \
+# Delete ACL
+kac acl delete \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice \
   --operation READ \
   --permission ALLOW
 ```
 
-3. List all topics with authentication:
+### Consumer Group Commands
 ```bash
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret topic list
-```
-
-### Consumer Group Management
-
-List consumer groups:
-```bash
+# List consumer groups
 kac consumergroup list
-```
 
-Get consumer group details:
-```bash
+# Get group details
 kac consumergroup get my-group-id
+
+# Set group offsets
+kac consumergroup set-offsets my-group-id my-topic \
+  --partition 0 --offset 1000
 ```
 
-Set consumer group offsets:
-```bash
-kac consumergroup set-offsets my-group-id my-topic --partition 0 --offset 1000
-```
+## Build Information
 
-Example output for consumer group details:
-```
-Group ID: my-group-id
-State: Stable
+The build script (`build.sh`) provides:
+- Version information from git tags
+- CGO disabled for better portability
+- Stripped debug information for smaller binary size
+- Dependency management with `go mod tidy`
 
-Members:
-  Client ID: consumer-1
-  Client Host: consumer-1.example.com
-  Assignments:
-    Topic: my-topic
-    Partitions: [0, 1, 2]
+## Credits
 
-Offsets:
-  Topic: my-topic
-    Partition 0: Current=1000, End=1500, Lag=500
-    Partition 1: Current=2000, End=2500, Lag=500
-    Partition 2: Current=3000, End=3500, Lag=500
+Created by Jan Harald Fonås with the assistance of an LLM.
