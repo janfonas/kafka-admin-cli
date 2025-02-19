@@ -93,6 +93,37 @@ func init() {
 		},
 	}
 
+	// Get topic command
+	getTopicCmd := &cobra.Command{
+		Use:   "get [topic]",
+		Short: "Get details of a topic",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			if err != nil {
+				return fmt.Errorf("failed to create Kafka client: %w", err)
+			}
+			defer client.Close()
+
+			topic := args[0]
+			details, err := client.GetTopic(context.Background(), topic)
+			if err != nil {
+				return fmt.Errorf("failed to get topic details: %w", err)
+			}
+
+			fmt.Printf("Topic: %s\n", details.Name)
+			fmt.Printf("Partitions: %d\n", details.Partitions)
+			fmt.Printf("Replication Factor: %d\n", details.ReplicationFactor)
+			if len(details.Config) > 0 {
+				fmt.Println("Custom Configurations:")
+				for key, value := range details.Config {
+					fmt.Printf("  %s: %s\n", key, value)
+				}
+			}
+			return nil
+		},
+	}
+
 	// Topic command
 	topicCmd := &cobra.Command{
 		Use:   "topic",
@@ -101,6 +132,7 @@ func init() {
 	topicCmd.AddCommand(createTopicCmd)
 	topicCmd.AddCommand(deleteTopicCmd)
 	topicCmd.AddCommand(listTopicsCmd)
+	topicCmd.AddCommand(getTopicCmd)
 
 	rootCmd.AddCommand(topicCmd)
 }

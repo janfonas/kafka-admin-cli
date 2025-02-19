@@ -69,6 +69,11 @@ List topics:
 kac topic list
 ```
 
+Get topic details:
+```bash
+kac topic get mytopic
+```
+
 ### ACL Management
 
 Create an ACL:
@@ -96,6 +101,14 @@ kac acl delete \
 List ACLs:
 ```bash
 kac acl list
+```
+
+Get ACL details:
+```bash
+kac acl get \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice
 ```
 
 ## Authentication

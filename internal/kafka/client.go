@@ -162,6 +162,74 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 	return nil
 }
 
+type TopicDetails struct {
+	Name              string
+	Partitions        int32
+	ReplicationFactor int16
+	Config            map[string]string
+}
+
+func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, error) {
+	req := &kmsg.MetadataRequest{
+		Topics: []kmsg.MetadataRequestTopic{
+			{
+				Topic: &topic,
+			},
+		},
+	}
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topic metadata: %w", err)
+	}
+
+	if len(resp.Topics) == 0 {
+		return nil, fmt.Errorf("topic not found: %s", topic)
+	}
+
+	if resp.Topics[0].ErrorCode != 0 {
+		switch resp.Topics[0].ErrorCode {
+		case 3:
+			return nil, fmt.Errorf("topic does not exist: %s", topic)
+		default:
+			return nil, fmt.Errorf("failed to get topic metadata: error code %v", resp.Topics[0].ErrorCode)
+		}
+	}
+
+	// Get topic configuration
+	configReq := &kmsg.DescribeConfigsRequest{
+		Resources: []kmsg.DescribeConfigsRequestResource{
+			{
+				ResourceType: kmsg.ConfigResourceTypeTopic,
+				ResourceName: topic,
+			},
+		},
+	}
+	configResp, err := configReq.RequestWith(ctx, c.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topic config: %w", err)
+	}
+
+	config := make(map[string]string)
+	if len(configResp.Resources) > 0 {
+		for _, entry := range configResp.Resources[0].Configs {
+			if !entry.IsDefault {
+				if entry.Value != nil {
+					config[entry.Name] = *entry.Value
+				}
+			}
+		}
+	}
+
+	details := &TopicDetails{
+		Name:              topic,
+		Partitions:        int32(len(resp.Topics[0].Partitions)),
+		ReplicationFactor: int16(len(resp.Topics[0].Partitions[0].Replicas)),
+		Config:            config,
+	}
+
+	return details, nil
+}
+
 func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
 	req := &kmsg.MetadataRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
@@ -261,6 +329,30 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 		}
 	}
 	return nil
+}
+
+func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
+	resourceTypeInt, err := strconv.Atoi(resourceType)
+	if err != nil {
+		return nil, fmt.Errorf("invalid resource type: %w", err)
+	}
+
+	req := &kmsg.DescribeACLsRequest{
+		ResourceType: kmsg.ACLResourceType(resourceTypeInt),
+		ResourceName: &resourceName,
+		Principal:    &principal,
+	}
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ACL: %w", err)
+	}
+	if resp.ErrorCode != 0 {
+		return nil, fmt.Errorf("failed to get ACL: %v", resp.ErrorCode)
+	}
+	if len(resp.Resources) == 0 {
+		return nil, fmt.Errorf("no ACLs found for resource type %s, name %s, and principal %s", resourceType, resourceName, principal)
+	}
+	return resp.Resources, nil
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]kmsg.DescribeACLsResponseResource, error) {

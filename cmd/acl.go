@@ -120,6 +120,44 @@ func init() {
 		},
 	}
 
+	// Get ACL command
+	getAclCmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get ACL details",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			if err != nil {
+				return fmt.Errorf("failed to create Kafka client: %w", err)
+			}
+			defer client.Close()
+
+			acls, err := client.GetAcl(context.Background(), resourceType, resourceName, principal)
+			if err != nil {
+				return fmt.Errorf("failed to get ACL details: %w", err)
+			}
+
+			fmt.Printf("ACLs for Resource Type: %s, Resource Name: %s, Principal: %s\n\n", resourceType, resourceName, principal)
+			for _, acl := range acls {
+				fmt.Printf("Resource Type: %v\n", acl.ResourceType)
+				fmt.Printf("Resource Name: %v\n", acl.ResourceName)
+				for _, entry := range acl.ACLs {
+					fmt.Printf("  Principal: %v\n", entry.Principal)
+					fmt.Printf("  Host: %v\n", entry.Host)
+					fmt.Printf("  Operation: %v\n", entry.Operation)
+					fmt.Printf("  Permission Type: %v\n", entry.PermissionType)
+					fmt.Println()
+				}
+			}
+			return nil
+		},
+	}
+	getAclCmd.Flags().StringVar(&resourceType, "resource-type", "", "Resource type (e.g., TOPIC, GROUP)")
+	getAclCmd.Flags().StringVar(&resourceName, "resource-name", "", "Resource name")
+	getAclCmd.Flags().StringVar(&principal, "principal", "", "Principal (e.g., User:alice)")
+	getAclCmd.MarkFlagRequired("resource-type")
+	getAclCmd.MarkFlagRequired("resource-name")
+	getAclCmd.MarkFlagRequired("principal")
+
 	// ACL command
 	aclCmd := &cobra.Command{
 		Use:   "acl",
@@ -128,6 +166,7 @@ func init() {
 	aclCmd.AddCommand(createAclCmd)
 	aclCmd.AddCommand(deleteAclCmd)
 	aclCmd.AddCommand(listAclsCmd)
+	aclCmd.AddCommand(getAclCmd)
 
 	rootCmd.AddCommand(aclCmd)
 }
