@@ -98,7 +98,18 @@ func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, 
 		return fmt.Errorf("failed to create topic: %w", err)
 	}
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
-		return fmt.Errorf("failed to create topic: %v", resp.Topics[0].ErrorCode)
+		switch resp.Topics[0].ErrorCode {
+		case 7:
+			return fmt.Errorf("topic already exists: %s", topic)
+		case 37:
+			return fmt.Errorf("invalid replication factor: %d", replicationFactor)
+		case 39:
+			return fmt.Errorf("invalid number of partitions: %d", partitions)
+		case 41:
+			return fmt.Errorf("topic name is invalid")
+		default:
+			return fmt.Errorf("failed to create topic: error code %v", resp.Topics[0].ErrorCode)
+		}
 	}
 	return nil
 }
@@ -117,7 +128,14 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 		return fmt.Errorf("failed to delete topic: %w", err)
 	}
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
-		return fmt.Errorf("failed to delete topic: %v", resp.Topics[0].ErrorCode)
+		switch resp.Topics[0].ErrorCode {
+		case 3:
+			return fmt.Errorf("topic does not exist: %s", topic)
+		case 41:
+			return fmt.Errorf("topic name is invalid")
+		default:
+			return fmt.Errorf("failed to delete topic: error code %v", resp.Topics[0].ErrorCode)
+		}
 	}
 	return nil
 }
