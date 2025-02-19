@@ -27,7 +27,7 @@ Written by Jan Harald Fonås with the help of an LLM.`,
 func init() {
 	rootCmd.PersistentFlags().StringSliceVarP(&brokers, "brokers", "b", []string{"localhost:9092"}, "Kafka broker list (comma-separated)")
 	rootCmd.PersistentFlags().StringVarP(&username, "username", "u", "", "SASL username")
-	rootCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "SASL password")
+	rootCmd.PersistentFlags().StringVarP(&password, "password", "w", "", "SASL password")
 	rootCmd.PersistentFlags().StringVar(&caCertPath, "ca-cert", "", "Path to CA certificate file for TLS connections")
 }
 

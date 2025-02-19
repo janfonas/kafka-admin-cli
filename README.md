@@ -48,7 +48,7 @@ This will create a `kac` binary in the current directory. The build script:
 
 - `--brokers, -b`: Kafka broker list (comma-separated) (default: "localhost:9092")
 - `--username, -u`: SASL username
-- `--password, -p`: SASL password
+- `--password, -w`: SASL password
 - `--ca-cert`: Path to CA certificate file for TLS connections
 
 ### Topic Management
