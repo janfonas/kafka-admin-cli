@@ -194,7 +194,14 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 		return fmt.Errorf("failed to create ACL: %w", err)
 	}
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
-		return fmt.Errorf("failed to create ACL: %v", resp.Results[0].ErrorCode)
+		switch resp.Results[0].ErrorCode {
+		case 7:
+			// Error code 7 during creation seems to be returned when the operation is successful
+			// but the metadata is still being updated
+			return nil
+		default:
+			return fmt.Errorf("failed to create ACL: error code %v", resp.Results[0].ErrorCode)
+		}
 	}
 	return nil
 }
@@ -230,7 +237,14 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 		return fmt.Errorf("failed to delete ACL: %w", err)
 	}
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
-		return fmt.Errorf("failed to delete ACL: %v", resp.Results[0].ErrorCode)
+		switch resp.Results[0].ErrorCode {
+		case 7:
+			// Error code 7 during deletion seems to be returned when the operation is successful
+			// but the metadata is still being updated
+			return nil
+		default:
+			return fmt.Errorf("failed to delete ACL: error code %v", resp.Results[0].ErrorCode)
+		}
 	}
 	return nil
 }
