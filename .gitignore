@@ -1,0 +1,11 @@
+# Binaries
+kac
+ntkac
+kafka-admin-cli
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
