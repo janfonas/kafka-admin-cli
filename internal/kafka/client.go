@@ -367,36 +367,42 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
-	fmt.Println("DEBUG: Starting SCRAM users list operation...")
+	fmt.Println("DEBUG: Starting ACL list operation...")
 
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Use the admin client to list SCRAM users with retries
-	var users map[string]kadm.DescribedUserSCRAM
-	var err error
-	for retries := 3; retries > 0; retries-- {
-		users, err = c.adminClient.DescribeUserSCRAMs(ctx)
-		if err == nil {
-			break
-		}
-		if retries > 1 {
-			fmt.Printf("DEBUG: Retry %d after error: %v\n", 4-retries, err)
-			time.Sleep(time.Second)
-		}
-	}
+	// Use the low-level API to list ACLs
+	req := &kmsg.DescribeACLsRequest{}
+	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		fmt.Printf("DEBUG: SCRAM users list error: %v\n", err)
-		return nil, fmt.Errorf("failed to list SCRAM users: %w", err)
+		fmt.Printf("DEBUG: ACL list error: %v\n", err)
+		return nil, fmt.Errorf("failed to list ACLs: %w", err)
 	}
 
-	// Extract usernames
-	var usernames []string
-	for username := range users {
-		usernames = append(usernames, username)
+	if resp.ErrorCode != 0 {
+		fmt.Printf("DEBUG: ACL list error code: %v\n", resp.ErrorCode)
+		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
 	}
 
-	fmt.Printf("DEBUG: Successfully retrieved %d SCRAM users\n", len(usernames))
-	return usernames, nil
+	// Extract unique principals
+	principalSet := make(map[string]struct{})
+	for _, resource := range resp.Resources {
+		for _, acl := range resource.ACLs {
+			if strings.HasPrefix(acl.Principal, "User:") {
+				principal := strings.TrimPrefix(acl.Principal, "User:")
+				principalSet[principal] = struct{}{}
+			}
+		}
+	}
+
+	// Convert set to slice
+	var principals []string
+	for principal := range principalSet {
+		principals = append(principals, principal)
+	}
+
+	fmt.Printf("DEBUG: Successfully retrieved %d principals\n", len(principals))
+	return principals, nil
 }
