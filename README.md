@@ -50,6 +50,7 @@ This will create a `kac` binary in the current directory. The build script:
 - `--username, -u`: SASL username
 - `--password, -w`: SASL password
 - `--ca-cert`: Path to CA certificate file for TLS connections
+- `--sasl-mechanism`: SASL mechanism (SCRAM-SHA-512 or PLAIN) (default: SCRAM-SHA-512)
 
 ### Topic Management
 
@@ -102,11 +103,14 @@ kac acl list
 The CLI supports SCRAM-SHA-512 authentication and custom CA certificates for TLS connections. Provide your credentials and CA certificate using the global flags:
 
 ```bash
-# Using SCRAM-SHA-512 authentication
+# Using SCRAM-SHA-512 authentication (default)
 kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret topic list
 
-# Using SCRAM-SHA-512 with custom CA certificate
-kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --ca-cert /path/to/ca.crt topic list
+# Using SASL/PLAIN authentication
+kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-mechanism PLAIN topic list
+
+# Using authentication with custom CA certificate
+kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-mechanism PLAIN --ca-cert /path/to/ca.crt topic list
 ```
 
 ## Examples

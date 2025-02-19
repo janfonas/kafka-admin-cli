@@ -8,10 +8,11 @@ import (
 )
 
 var (
-	brokers    []string
-	username   string
-	password   string
-	caCertPath string
+	brokers       []string
+	username      string
+	password      string
+	caCertPath    string
+	saslMechanism string
 )
 
 var version = "dev"
@@ -29,6 +30,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&username, "username", "u", "", "SASL username")
 	rootCmd.PersistentFlags().StringVarP(&password, "password", "w", "", "SASL password")
 	rootCmd.PersistentFlags().StringVar(&caCertPath, "ca-cert", "", "Path to CA certificate file for TLS connections")
+	rootCmd.PersistentFlags().StringVar(&saslMechanism, "sasl-mechanism", "SCRAM-SHA-512", "SASL mechanism (SCRAM-SHA-512 or PLAIN)")
 }
 
 func Execute() {
