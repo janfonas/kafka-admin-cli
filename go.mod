@@ -1,4 +1,4 @@
-module github.com/a00262/kafka-admin-cli
+module github.com/janfonas/kafka-admin-cli
 
 go 1.21
 

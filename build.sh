@@ -14,9 +14,9 @@ BUILD_FLAGS=(
     "kac"
     "-ldflags"
     "-s -w \
-    -X github.com/a00262/kafka-admin-cli/cmd.version=${VERSION} \
-    -X github.com/a00262/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT} \
-    -X github.com/a00262/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}"
+    -X github.com/janfonas/kafka-admin-cli/cmd.version=${VERSION} \
+    -X github.com/janfonas/kafka-admin-cli/cmd.gitCommit=${GIT_COMMIT} \
+    -X github.com/janfonas/kafka-admin-cli/cmd.buildDate=${BUILD_DATE}"
 )
 
 echo "Building kac version ${VERSION}..."
