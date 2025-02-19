@@ -20,15 +20,15 @@ Written by Jan Harald Fonås with the help of an LLM.
 ### Option 1: Using go install
 
 ```bash
-go install github.com/a00262/kac@latest
+go install github.com/janfonas/kafka-admin-cli@latest
 ```
 
 ### Option 2: Building from source
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/a00262/kac.git
-cd kac
+git clone https://github.com/janfonas/kafka-admin-cli.git
+cd kafka-admin-cli
 ```
 
 2. Build the binary:
