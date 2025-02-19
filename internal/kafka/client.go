@@ -100,6 +100,10 @@ func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, 
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
 		switch resp.Topics[0].ErrorCode {
 		case 7:
+			// Error code 7 during creation seems to be returned when the operation is successful
+			// but the metadata is still being updated
+			return nil
+		case 36:
 			return fmt.Errorf("topic already exists: %s", topic)
 		case 37:
 			return fmt.Errorf("invalid replication factor: %d", replicationFactor)
