@@ -9,9 +9,11 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
@@ -19,13 +21,25 @@ type Client struct {
 	client *kgo.Client
 }
 
-func NewClient(brokers []string, username, password, caCertPath string) (*Client, error) {
-	auth := scram.Auth{
-		User: username,
-		Pass: password,
-	}
-	mechanism := func(ctx context.Context) (scram.Auth, error) {
-		return auth, nil
+func NewClient(brokers []string, username, password, caCertPath, saslMechanism string) (*Client, error) {
+	var saslOption kgo.Opt
+	switch strings.ToUpper(saslMechanism) {
+	case "SCRAM-SHA-512":
+		auth := scram.Auth{
+			User: username,
+			Pass: password,
+		}
+		mechanism := func(ctx context.Context) (scram.Auth, error) {
+			return auth, nil
+		}
+		saslOption = kgo.SASL(scram.Sha512(mechanism))
+	case "PLAIN":
+		saslOption = kgo.SASL(plain.Auth{
+			User: username,
+			Pass: password,
+		}.AsMechanism())
+	default:
+		return nil, fmt.Errorf("unsupported SASL mechanism: %s", saslMechanism)
 	}
 
 	seeds := make([]string, len(brokers))
@@ -69,7 +83,7 @@ func NewClient(brokers []string, username, password, caCertPath string) (*Client
 
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(seeds...),
-		kgo.SASL(scram.Sha512(mechanism)),
+		saslOption,
 		kgo.Dialer(dialer),
 	)
 	if err != nil {
