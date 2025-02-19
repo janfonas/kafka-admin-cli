@@ -19,7 +19,11 @@ func init() {
 		Use:   "list",
 		Short: "List all consumer groups",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -49,7 +53,11 @@ func init() {
 		Short: "Get details of a consumer group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -93,7 +101,11 @@ func init() {
 		Short: "Set consumer group offsets for a topic partition",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}

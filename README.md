@@ -70,15 +70,21 @@ kac consumergroup list
 
 ### Security Options
 ```bash
-# SASL Authentication
+# Using password prompt (recommended)
+kac --brokers kafka1:9092 --username alice --prompt-password topic list
+
+# Using password from stdin
+echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password topic list
+
+# Using password flag (not recommended)
 kac --brokers kafka1:9092 --username alice --password secret topic list
 
-# Custom CA Certificate
-kac --brokers kafka1:9092 --username alice --password secret \
+# Using custom CA certificate
+kac --brokers kafka1:9092 --username alice --prompt-password \
     --ca-cert /path/to/ca.crt topic list
 
-# Self-signed Certificates
-kac --brokers kafka1:9092 --username alice --password secret --insecure topic list
+# Using self-signed certificates
+kac --brokers kafka1:9092 --username alice --prompt-password --insecure topic list
 ```
 
 ## Command Reference
@@ -100,7 +106,8 @@ Shows detailed version information including:
 ### Global Flags
 - `--brokers, -b`: Kafka broker list (comma-separated)
 - `--username, -u`: SASL username
-- `--password, -w`: SASL password
+- `--password, -w`: SASL password (use -P to prompt for password)
+- `--prompt-password, -P`: Prompt for password or read from stdin
 - `--ca-cert`: CA certificate file path
 - `--sasl-mechanism`: Authentication mechanism (SCRAM-SHA-512 or PLAIN)
 - `--insecure`: Skip TLS certificate verification
