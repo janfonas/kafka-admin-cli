@@ -366,6 +366,170 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 	return resp.Resources, nil
 }
 
+type ConsumerGroupMember struct {
+	ClientID    string
+	ClientHost  string
+	Assignments map[string][]int32 // topic -> partitions
+}
+
+type PartitionOffset struct {
+	Current int64
+	End     int64
+	Lag     int64
+}
+
+type ConsumerGroupDetails struct {
+	State   string
+	Members []ConsumerGroupMember
+	Offsets map[string]map[int32]PartitionOffset // topic -> partition -> offset
+}
+
+func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
+	fmt.Println("DEBUG: Starting consumer groups list operation...")
+
+	req := &kmsg.ListGroupsRequest{}
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list consumer groups: %w", err)
+	}
+
+	var groups []string
+	for _, group := range resp.Groups {
+		groups = append(groups, group.Group)
+	}
+
+	fmt.Printf("DEBUG: Successfully retrieved %d consumer groups\n", len(groups))
+	return groups, nil
+}
+
+func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*ConsumerGroupDetails, error) {
+	// Get group description
+	descReq := &kmsg.DescribeGroupsRequest{
+		Groups: []string{groupID},
+	}
+	descResp, err := descReq.RequestWith(ctx, c.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe consumer group: %w", err)
+	}
+
+	if len(descResp.Groups) == 0 {
+		return nil, fmt.Errorf("group not found: %s", groupID)
+	}
+
+	group := descResp.Groups[0]
+	if group.ErrorCode != 0 {
+		return nil, fmt.Errorf("failed to get group details: error code %v", group.ErrorCode)
+	}
+
+	// Parse members and their assignments
+	members := make([]ConsumerGroupMember, 0, len(group.Members))
+	topicPartitions := make(map[string][]int32)
+
+	for _, member := range group.Members {
+		assignments := make(map[string][]int32)
+		if member.MemberAssignment != nil {
+			// Parse member assignment
+			var memberAssignment kmsg.ConsumerMemberAssignment
+			err := memberAssignment.ReadFrom(member.MemberAssignment)
+			if err != nil {
+				continue
+			}
+
+			for _, topic := range memberAssignment.Topics {
+				assignments[topic.Topic] = topic.Partitions
+				topicPartitions[topic.Topic] = append(topicPartitions[topic.Topic], topic.Partitions...)
+			}
+		}
+
+		members = append(members, ConsumerGroupMember{
+			ClientID:    member.ClientID,
+			ClientHost:  member.ClientHost,
+			Assignments: assignments,
+		})
+	}
+
+	// Get offsets for all topic partitions
+	offsets := make(map[string]map[int32]PartitionOffset)
+	for topic, partitions := range topicPartitions {
+		offsetReq := &kmsg.OffsetFetchRequest{
+			Group: groupID,
+			Topics: []kmsg.OffsetFetchRequestTopic{{
+				Topic:      topic,
+				Partitions: partitions,
+			}},
+		}
+		offsetResp, err := offsetReq.RequestWith(ctx, c.client)
+		if err != nil {
+			continue
+		}
+
+		// Get end offsets
+		endOffsetReq := &kmsg.ListOffsetsRequest{
+			Topics: []kmsg.ListOffsetsRequestTopic{{
+				Topic: topic,
+				Partitions: func() []kmsg.ListOffsetsRequestTopicPartition {
+					parts := make([]kmsg.ListOffsetsRequestTopicPartition, len(partitions))
+					for i, p := range partitions {
+						parts[i] = kmsg.ListOffsetsRequestTopicPartition{
+							Partition: p,
+							Timestamp: -1, // Latest offset
+						}
+					}
+					return parts
+				}(),
+			}},
+		}
+		endOffsetResp, err := endOffsetReq.RequestWith(ctx, c.client)
+		if err != nil {
+			continue
+		}
+
+		offsets[topic] = make(map[int32]PartitionOffset)
+		for i, partition := range partitions {
+			current := offsetResp.Topics[0].Partitions[i].Offset
+			end := endOffsetResp.Topics[0].Partitions[i].Offset
+			offsets[topic][partition] = PartitionOffset{
+				Current: current,
+				End:     end,
+				Lag:     end - current,
+			}
+		}
+	}
+
+	return &ConsumerGroupDetails{
+		State:   group.State,
+		Members: members,
+		Offsets: offsets,
+	}, nil
+}
+
+func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic string, partition int32, offset int64) error {
+	req := &kmsg.OffsetCommitRequest{
+		Group: groupID,
+		Topics: []kmsg.OffsetCommitRequestTopic{{
+			Topic: topic,
+			Partitions: []kmsg.OffsetCommitRequestTopicPartition{{
+				Partition: partition,
+				Offset:    offset,
+			}},
+		}},
+	}
+
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return fmt.Errorf("failed to commit offset: %w", err)
+	}
+
+	if len(resp.Topics) > 0 && len(resp.Topics[0].Partitions) > 0 {
+		errorCode := resp.Topics[0].Partitions[0].ErrorCode
+		if errorCode != 0 {
+			return fmt.Errorf("failed to commit offset: error code %v", errorCode)
+		}
+	}
+
+	return nil
+}
+
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	// We are seeing timeouts calling the DescribeACLsRequest, so we will use the low-level API instead
 	fmt.Println("DEBUG: Starting ACL list operation...")
