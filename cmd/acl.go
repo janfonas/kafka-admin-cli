@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/a00262/kafka-admin-cli/internal/kafka"
+	"github.com/janfonas/kafka-admin-cli/internal/kafka"
 
 	"github.com/spf13/cobra"
 )
