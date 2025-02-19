@@ -361,21 +361,32 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]kmsg.DescribeACLsResponseResource, error) {
-	fmt.Println("DEBUG: Starting ACL list operation...")
+	fmt.Println("DEBUG: Starting SCRAM users list operation...")
 
-	// Use the low-level kmsg API directly since we need the specific response format
-	req := &kmsg.DescribeACLsRequest{}
-	resp, err := req.RequestWith(ctx, c.client)
+	// Use the admin client to list SCRAM users
+	users, err := c.adminClient.DescribeUserSCRAMs(ctx)
 	if err != nil {
-		fmt.Printf("DEBUG: ACL list error: %v\n", err)
-		return nil, fmt.Errorf("failed to list ACLs: %w", err)
+		fmt.Printf("DEBUG: SCRAM users list error: %v\n", err)
+		return nil, fmt.Errorf("failed to list SCRAM users: %w", err)
 	}
 
-	if resp.ErrorCode != 0 {
-		fmt.Printf("DEBUG: ACL list error code: %v\n", resp.ErrorCode)
-		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
+	// Convert SCRAM users to ACL resources format
+	var resources []kmsg.DescribeACLsResponseResource
+	for username := range users {
+		resources = append(resources, kmsg.DescribeACLsResponseResource{
+			ResourceType: kmsg.ACLResourceType(12), // User resource type
+			ResourceName: username,
+			ACLs: []kmsg.DescribeACLsResponseResourceACL{
+				{
+					Principal:      "User:" + username,
+					Host:           "*",
+					Operation:      kmsg.ACLOperation(31),     // ALL operation
+					PermissionType: kmsg.ACLPermissionType(3), // ALLOW permission
+				},
+			},
+		})
 	}
 
-	fmt.Printf("DEBUG: Successfully retrieved %d ACL resources\n", len(resp.Resources))
-	return resp.Resources, nil
+	fmt.Printf("DEBUG: Successfully retrieved %d SCRAM users\n", len(resources))
+	return resources, nil
 }
