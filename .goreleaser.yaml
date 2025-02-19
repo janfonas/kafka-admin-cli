@@ -12,15 +12,11 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
       - -X github.com/janfonas/kafka-admin-cli/cmd.version={{.Version}}
-      - -X github.com/janfonas/kafka-admin-cli/cmd.gitCommit={{.Commit}}
+      - -X github.com/janfonas/kafka-admin-cli/cmd.commit={{.Commit}}
       - -X github.com/janfonas/kafka-admin-cli/cmd.buildDate={{.Date}}
-    binary: kac
 
 archives:
   - format: tar.gz
@@ -28,16 +24,12 @@ archives:
       {{ .ProjectName }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
         format: zip
-
-checksum:
-  name_template: 'checksums.txt'
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -47,3 +39,14 @@ changelog:
       - '^test:'
       - '^ci:'
       - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+release:
+  prerelease: auto

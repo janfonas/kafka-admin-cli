@@ -3,152 +3,166 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/janfonas/kafka-admin-cli/internal/kafka"
-
 	"github.com/spf13/cobra"
 )
 
-var (
-	partitions        int
-	replicationFactor int
-)
+func runTopicList(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
 
-func init() {
-	// Create topic command
-	createTopicCmd := &cobra.Command{
-		Use:   "create [topic]",
-		Short: "Create a new topic",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
-
-			topic := args[0]
-			err = client.CreateTopic(context.Background(), topic, partitions, replicationFactor)
-			if err != nil {
-				return fmt.Errorf("failed to create topic: %w", err)
-			}
-
-			fmt.Printf("Topic '%s' created successfully\n", topic)
-			return nil
-		},
-	}
-	createTopicCmd.Flags().IntVarP(&partitions, "partitions", "p", 1, "Number of partitions")
-	createTopicCmd.Flags().IntVarP(&replicationFactor, "replication-factor", "r", 1, "Replication factor")
-
-	// Delete topic command
-	deleteTopicCmd := &cobra.Command{
-		Use:   "delete [topic]",
-		Short: "Delete a topic",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
-
-			topic := args[0]
-			err = client.DeleteTopic(context.Background(), topic)
-			if err != nil {
-				return fmt.Errorf("failed to delete topic: %w", err)
-			}
-
-			fmt.Printf("Topic '%s' deleted successfully\n", topic)
-			return nil
-		},
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
 	}
 
-	// List topics command
-	listTopicsCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all topics",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
 
-			topics, err := client.ListTopics(context.Background())
-			if err != nil {
-				return fmt.Errorf("failed to list topics: %w", err)
-			}
-
-			if len(topics) == 0 {
-				fmt.Println("No topics found")
-				return nil
-			}
-
-			fmt.Println("Topics:")
-			for _, topic := range topics {
-				fmt.Printf("- %s\n", topic)
-			}
-			return nil
-		},
+	// List topics
+	topics, err := client.ListTopics(ctx)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
 	}
 
-	// Get topic command
-	getTopicCmd := &cobra.Command{
-		Use:   "get [topic]",
-		Short: "Get details of a topic",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
+	// Print topics
+	for _, topic := range topics {
+		fmt.Fprintln(cmd.OutOrStdout(), topic)
+	}
+}
 
-			topic := args[0]
-			details, err := client.GetTopic(context.Background(), topic)
-			if err != nil {
-				return fmt.Errorf("failed to get topic details: %w", err)
-			}
-
-			fmt.Printf("Topic: %s\n", details.Name)
-			fmt.Printf("Partitions: %d\n", details.Partitions)
-			fmt.Printf("Replication Factor: %d\n", details.ReplicationFactor)
-			if len(details.Config) > 0 {
-				fmt.Println("Custom Configurations:")
-				for key, value := range details.Config {
-					fmt.Printf("  %s: %s\n", key, value)
-				}
-			}
-			return nil
-		},
+func runTopicCreate(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
+		return
 	}
 
-	// Topic command
-	topicCmd := &cobra.Command{
-		Use:   "topic",
-		Short: "Manage Kafka topics",
-	}
-	topicCmd.AddCommand(createTopicCmd)
-	topicCmd.AddCommand(deleteTopicCmd)
-	topicCmd.AddCommand(listTopicsCmd)
-	topicCmd.AddCommand(getTopicCmd)
+	ctx := context.Background()
+	topic := args[0]
 
-	rootCmd.AddCommand(topicCmd)
+	// Get flags
+	partitions, _ := cmd.Flags().GetInt("partitions")
+	replicationFactor, _ := cmd.Flags().GetInt("replication-factor")
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Create topic
+	err = client.CreateTopic(ctx, topic, partitions, replicationFactor)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s created successfully\n", topic)
+}
+
+func runTopicDelete(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
+		return
+	}
+
+	ctx := context.Background()
+	topic := args[0]
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Delete topic
+	err = client.DeleteTopic(ctx, topic)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s deleted successfully\n", topic)
+}
+
+func runTopicGet(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
+		return
+	}
+
+	ctx := context.Background()
+	topic := args[0]
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Get topic details
+	details, err := client.GetTopic(ctx, topic)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	// Print topic details
+	fmt.Fprintf(cmd.OutOrStdout(), "Name: %s\n", details.Name)
+	fmt.Fprintf(cmd.OutOrStdout(), "Partitions: %d\n", details.Partitions)
+	fmt.Fprintf(cmd.OutOrStdout(), "Replication Factor: %d\n", details.ReplicationFactor)
+	if len(details.Config) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "Config:")
+		for k, v := range details.Config {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", k, v)
+		}
+	}
 }
