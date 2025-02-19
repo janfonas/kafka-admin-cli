@@ -15,11 +15,28 @@ Built with security in mind, supporting SASL authentication and TLS encryption.
 
 ### Installation
 
+#### Pre-compiled Binaries (Recommended)
+Download the latest pre-compiled binary for your platform from the [GitHub Releases](https://github.com/janfonas/kafka-admin-cli/releases) page.
+
+```bash
+# Linux (x86_64)
+curl -L https://github.com/janfonas/kafka-admin-cli/releases/latest/download/kafka-admin-cli_Linux_x86_64.tar.gz | tar xz
+sudo mv kac /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L https://github.com/janfonas/kafka-admin-cli/releases/latest/download/kafka-admin-cli_Darwin_arm64.tar.gz | tar xz
+sudo mv kac /usr/local/bin/
+
+# Windows (x86_64)
+# Download the ZIP file from the releases page and extract kac.exe
+```
+
+#### Build from Source
 ```bash
 # Using go install
 go install github.com/janfonas/kafka-admin-cli@latest
 
-# Or build from source
+# Or clone and build
 git clone https://github.com/janfonas/kafka-admin-cli.git
 cd kafka-admin-cli
 ./build.sh
