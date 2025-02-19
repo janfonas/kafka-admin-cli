@@ -533,8 +533,7 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	//req := &kmsg.DescribeACLsRequest{}
-	req := kmsg.NewDescribeACLsRequest()
+	req := &kmsg.DescribeACLsRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ACLs: %w", err)
