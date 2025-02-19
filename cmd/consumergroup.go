@@ -3,140 +3,154 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/janfonas/kafka-admin-cli/internal/kafka"
 	"github.com/spf13/cobra"
 )
 
-var (
-	partition int32
-	offset    int64
-)
+func runConsumerGroupList(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
 
-func init() {
-	// List consumer groups command
-	listConsumerGroupsCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all consumer groups",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
-
-			groups, err := client.ListConsumerGroups(context.Background())
-			if err != nil {
-				return fmt.Errorf("failed to list consumer groups: %w", err)
-			}
-
-			if len(groups) == 0 {
-				fmt.Println("No consumer groups found")
-				return nil
-			}
-
-			fmt.Println("Consumer Groups:")
-			for _, group := range groups {
-				fmt.Printf("- %s\n", group)
-			}
-			return nil
-		},
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
 	}
 
-	// Get consumer group command
-	getConsumerGroupCmd := &cobra.Command{
-		Use:   "get [group-id]",
-		Short: "Get details of a consumer group",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
 
-			groupID := args[0]
-			details, err := client.GetConsumerGroup(context.Background(), groupID)
-			if err != nil {
-				return fmt.Errorf("failed to get consumer group details: %w", err)
-			}
-
-			fmt.Printf("Group ID: %s\n", groupID)
-			fmt.Printf("State: %s\n", details.State)
-			fmt.Println("\nMembers:")
-			for _, member := range details.Members {
-				fmt.Printf("  Client ID: %s\n", member.ClientID)
-				fmt.Printf("  Client Host: %s\n", member.ClientHost)
-				fmt.Println("  Assignments:")
-				for topic, partitions := range member.Assignments {
-					fmt.Printf("    Topic: %s\n", topic)
-					fmt.Printf("    Partitions: %v\n", partitions)
-				}
-				fmt.Println()
-			}
-
-			fmt.Println("Offsets:")
-			for topic, partitions := range details.Offsets {
-				fmt.Printf("  Topic: %s\n", topic)
-				for partition, offset := range partitions {
-					fmt.Printf("    Partition %d: Current=%d, End=%d, Lag=%d\n",
-						partition, offset.Current, offset.End, offset.Lag)
-				}
-			}
-			return nil
-		},
+	// List consumer groups
+	groups, err := client.ListConsumerGroups(ctx)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
 	}
 
-	// Set offsets command
-	setOffsetsCmd := &cobra.Command{
-		Use:   "set-offsets [group-id] [topic]",
-		Short: "Set consumer group offsets for a topic partition",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pass, err := getPassword()
-			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
-			}
-			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
-			if err != nil {
-				return fmt.Errorf("failed to create Kafka client: %w", err)
-			}
-			defer client.Close()
-
-			groupID := args[0]
-			topic := args[1]
-
-			err = client.SetConsumerGroupOffsets(context.Background(), groupID, topic, partition, offset)
-			if err != nil {
-				return fmt.Errorf("failed to set consumer group offsets: %w", err)
-			}
-
-			fmt.Printf("Successfully set offset %d for partition %d of topic %s in group %s\n",
-				offset, partition, topic, groupID)
-			return nil
-		},
+	// Print consumer groups
+	for _, group := range groups {
+		fmt.Fprintln(cmd.OutOrStdout(), group)
 	}
-	setOffsetsCmd.Flags().Int32Var(&partition, "partition", 0, "Partition number")
-	setOffsetsCmd.Flags().Int64Var(&offset, "offset", 0, "New offset value")
-	setOffsetsCmd.MarkFlagRequired("partition")
-	setOffsetsCmd.MarkFlagRequired("offset")
+}
 
-	// Consumer group command
-	consumerGroupCmd := &cobra.Command{
-		Use:   "consumergroup",
-		Short: "Manage Kafka consumer groups",
+func runConsumerGroupGet(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID is required")
+		return
 	}
-	consumerGroupCmd.AddCommand(listConsumerGroupsCmd)
-	consumerGroupCmd.AddCommand(getConsumerGroupCmd)
-	consumerGroupCmd.AddCommand(setOffsetsCmd)
 
-	rootCmd.AddCommand(consumerGroupCmd)
+	ctx := context.Background()
+	groupID := args[0]
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Get consumer group details
+	details, err := client.GetConsumerGroup(ctx, groupID)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	// Print consumer group details
+	fmt.Fprintf(cmd.OutOrStdout(), "Group ID: %s\n", groupID)
+	fmt.Fprintf(cmd.OutOrStdout(), "State: %s\n", details.State)
+	fmt.Fprintln(cmd.OutOrStdout(), "Members:")
+	for _, member := range details.Members {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Client ID: %s\n", member.ClientID)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Client Host: %s\n", member.ClientHost)
+		fmt.Fprintln(cmd.OutOrStdout(), "  Assignments:")
+		for topic, partitions := range member.Assignments {
+			fmt.Fprintf(cmd.OutOrStdout(), "    Topic: %s\n", topic)
+			fmt.Fprintf(cmd.OutOrStdout(), "    Partitions: %v\n", partitions)
+		}
+		fmt.Fprintln(cmd.OutOrStdout())
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Offsets:")
+	for topic, partitions := range details.Offsets {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Topic: %s\n", topic)
+		for partition, offset := range partitions {
+			fmt.Fprintf(cmd.OutOrStdout(), "    Partition: %d\n", partition)
+			fmt.Fprintf(cmd.OutOrStdout(), "    Current: %d\n", offset.Current)
+			fmt.Fprintf(cmd.OutOrStdout(), "    End: %d\n", offset.End)
+			fmt.Fprintf(cmd.OutOrStdout(), "    Lag: %d\n", offset.Lag)
+		}
+	}
+}
+
+func runConsumerGroupSetOffsets(cmd *cobra.Command, args []string) {
+	if len(args) < 4 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID, topic, partition, and offset are required")
+		return
+	}
+
+	ctx := context.Background()
+	groupID := args[0]
+	topic := args[1]
+
+	partition, err := strconv.ParseInt(args[2], 10, 32)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid partition: %v\n", err)
+		return
+	}
+
+	offset, err := strconv.ParseInt(args[3], 10, 64)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid offset: %v\n", err)
+		return
+	}
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Set consumer group offsets
+	err = client.SetConsumerGroupOffsets(ctx, groupID, topic, int32(partition), offset)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Consumer group offsets set successfully")
 }

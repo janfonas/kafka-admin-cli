@@ -15,6 +15,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"github.com/twmb/franz-go/pkg/sasl"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
@@ -26,39 +27,29 @@ type Client struct {
 
 func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
 	var saslOption kgo.Opt
+	if err := validateSASLMechanism(saslMechanism); err != nil {
+		return nil, err
+	}
+
+	auth, err := configureSASL(username, password, saslMechanism)
+	if err != nil {
+		return nil, err
+	}
+
 	switch strings.ToUpper(saslMechanism) {
 	case "SCRAM-SHA-512":
-		auth := scram.Auth{
-			User: username,
-			Pass: password,
-		}
-		mechanism := func(ctx context.Context) (scram.Auth, error) {
-			return auth, nil
-		}
-		saslOption = kgo.SASL(scram.Sha512(mechanism))
+		saslOption = kgo.SASL(auth.(sasl.Mechanism))
 	case "PLAIN":
-		saslOption = kgo.SASL(plain.Auth{
-			User: username,
-			Pass: password,
-		}.AsMechanism())
-	default:
-		return nil, fmt.Errorf("unsupported SASL mechanism: %s", saslMechanism)
+		saslOption = kgo.SASL(auth.(plain.Auth).AsMechanism())
 	}
 
 	seeds := make([]string, len(brokers))
 	for i, broker := range brokers {
-		// Parse the broker URL to handle ports correctly
-		u, err := url.Parse("//" + broker) // Add scheme to make it parseable
+		u, err := parseURL(broker)
 		if err != nil {
 			return nil, fmt.Errorf("invalid broker URL %q: %w", broker, err)
 		}
-
-		// If no port is specified, use default
-		if u.Port() == "" {
-			seeds[i] = fmt.Sprintf("%s:9092", u.Hostname())
-		} else {
-			seeds[i] = fmt.Sprintf("%s:%s", u.Hostname(), u.Port())
-		}
+		seeds[i] = u
 	}
 
 	var tlsConfig *tls.Config
@@ -125,25 +116,7 @@ func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, 
 	if err != nil {
 		return fmt.Errorf("failed to create topic: %w", err)
 	}
-	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
-		switch resp.Topics[0].ErrorCode {
-		case 7:
-			// Error code 7 during creation seems to be returned when the operation is successful
-			// but the metadata is still being updated
-			return nil
-		case 36:
-			return fmt.Errorf("topic already exists: %s", topic)
-		case 37:
-			return fmt.Errorf("invalid replication factor: %d", replicationFactor)
-		case 39:
-			return fmt.Errorf("invalid number of partitions: %d", partitions)
-		case 41:
-			return fmt.Errorf("topic name is invalid")
-		default:
-			return fmt.Errorf("failed to create topic: error code %v", resp.Topics[0].ErrorCode)
-		}
-	}
-	return nil
+	return handleTopicCreateError(resp, topic, partitions, replicationFactor)
 }
 
 func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
@@ -289,17 +262,7 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 	if err != nil {
 		return fmt.Errorf("failed to create ACL: %w", err)
 	}
-	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
-		switch resp.Results[0].ErrorCode {
-		case 7:
-			// Error code 7 during creation seems to be returned when the operation is successful
-			// but the metadata is still being updated
-			return nil
-		default:
-			return fmt.Errorf("failed to create ACL: error code %v", resp.Results[0].ErrorCode)
-		}
-	}
-	return nil
+	return handleACLCreateError(resp)
 }
 
 func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string) error {
@@ -417,7 +380,7 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 
 	group := descResp.Groups[0]
 	if group.ErrorCode != 0 {
-		return nil, fmt.Errorf("failed to get group details: error code %v", group.ErrorCode)
+		return nil, handleConsumerGroupError(group.ErrorCode)
 	}
 
 	// Parse members and their assignments
@@ -522,7 +485,7 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 	if len(resp.Topics) > 0 && len(resp.Topics[0].Partitions) > 0 {
 		errorCode := resp.Topics[0].Partitions[0].ErrorCode
 		if errorCode != 0 {
-			return fmt.Errorf("failed to commit offset: error code %v", errorCode)
+			return handleConsumerGroupError(errorCode)
 		}
 	}
 
@@ -559,4 +522,114 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	}
 
 	return principals, nil
+}
+
+// Helper functions
+
+func parseURL(broker string) (string, error) {
+	if broker == "" {
+		return "", fmt.Errorf("empty broker address")
+	}
+
+	u, err := url.Parse("//" + broker)
+	if err != nil {
+		return "", err
+	}
+
+	hostname := u.Hostname()
+	if strings.Contains(hostname, ":") && !strings.HasPrefix(hostname, "[") {
+		hostname = "[" + hostname + "]"
+	}
+
+	if u.Port() == "" {
+		return fmt.Sprintf("%s:9092", hostname), nil
+	}
+	return fmt.Sprintf("%s:%s", hostname, u.Port()), nil
+}
+
+func validateSASLMechanism(mechanism string) error {
+	switch mechanism {
+	case "SCRAM-SHA-512", "PLAIN":
+		return nil
+	default:
+		return fmt.Errorf("unsupported SASL mechanism: %s", mechanism)
+	}
+}
+
+func configureSASL(username, password, mechanism string) (interface{}, error) {
+	if username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("password is required")
+	}
+
+	switch mechanism {
+	case "SCRAM-SHA-512":
+		return scram.Sha512(func(ctx context.Context) (scram.Auth, error) {
+			return scram.Auth{
+				User: username,
+				Pass: password,
+			}, nil
+		}), nil
+	case "PLAIN":
+		return plain.Auth{
+			User: username,
+			Pass: password,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported SASL mechanism: %s", mechanism)
+	}
+}
+
+func handleTopicCreateError(resp *kmsg.CreateTopicsResponse, topic string, partitions, replicationFactor int) error {
+	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
+		switch resp.Topics[0].ErrorCode {
+		case 7:
+			return nil
+		case 36:
+			return fmt.Errorf("topic already exists: %s", topic)
+		case 37:
+			return fmt.Errorf("invalid replication factor: %d", replicationFactor)
+		case 39:
+			return fmt.Errorf("invalid number of partitions: %d", partitions)
+		case 41:
+			return fmt.Errorf("topic name is invalid")
+		default:
+			return fmt.Errorf("failed to create topic: error code %v", resp.Topics[0].ErrorCode)
+		}
+	}
+	return nil
+}
+
+func handleACLCreateError(resp *kmsg.CreateACLsResponse) error {
+	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
+		switch resp.Results[0].ErrorCode {
+		case 7:
+			return nil
+		case 87:
+			return fmt.Errorf("invalid resource type or name")
+		case 88:
+			return fmt.Errorf("invalid principal format")
+		default:
+			return fmt.Errorf("failed to create ACL: error code %v", resp.Results[0].ErrorCode)
+		}
+	}
+	return nil
+}
+
+func handleConsumerGroupError(errorCode int16) error {
+	if errorCode != 0 {
+		switch errorCode {
+		case 7:
+			return nil
+		case 15:
+			return fmt.Errorf("consumer group not found")
+		case 24:
+			return fmt.Errorf("invalid consumer group id")
+		default:
+			return fmt.Errorf("failed to process consumer group request: error code %v", errorCode)
+		}
+	}
+	return nil
 }
