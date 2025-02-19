@@ -388,8 +388,6 @@ type ConsumerGroupDetails struct {
 }
 
 func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
-	fmt.Println("DEBUG: Starting consumer groups list operation...")
-
 	req := &kmsg.ListGroupsRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
@@ -400,8 +398,6 @@ func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
 	for _, group := range resp.Groups {
 		groups = append(groups, group.Group)
 	}
-
-	fmt.Printf("DEBUG: Successfully retrieved %d consumer groups\n", len(groups))
 	return groups, nil
 }
 
@@ -534,27 +530,19 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
-	// We are seeing timeouts calling the DescribeACLsRequest, so we will use the low-level API instead
-	fmt.Println("DEBUG: Starting ACL list operation...")
-
-	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Use the low-level API to list ACLs
 	req := &kmsg.DescribeACLsRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		fmt.Printf("DEBUG: ACL list error: %v\n", err)
 		return nil, fmt.Errorf("failed to list ACLs: %w", err)
 	}
 
 	if resp.ErrorCode != 0 {
-		fmt.Printf("DEBUG: ACL list error code: %v\n", resp.ErrorCode)
 		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
 	}
 
-	// Extract unique principals
 	principalSet := make(map[string]struct{})
 	for _, resource := range resp.Resources {
 		for _, acl := range resource.ACLs {
@@ -565,12 +553,10 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	// Convert set to slice
 	var principals []string
 	for principal := range principalSet {
 		principals = append(principals, principal)
 	}
 
-	fmt.Printf("DEBUG: Successfully retrieved %d principals\n", len(principals))
 	return principals, nil
 }
