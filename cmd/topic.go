@@ -21,7 +21,11 @@ func init() {
 		Short: "Create a new topic",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -46,7 +50,11 @@ func init() {
 		Short: "Delete a topic",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -69,7 +77,11 @@ func init() {
 		Short: "List all topics",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -99,7 +111,11 @@ func init() {
 		Short: "Get details of a topic",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
+			pass, err := getPassword()
+			if err != nil {
+				return fmt.Errorf("failed to get password: %w", err)
+			}
+			client, err := kafka.NewClient(brokers, username, pass, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
