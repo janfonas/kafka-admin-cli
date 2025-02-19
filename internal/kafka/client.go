@@ -360,7 +360,7 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 	return resp.Resources, nil
 }
 
-func (c *Client) ListAcls(ctx context.Context) ([]kmsg.DescribeACLsResponseResource, error) {
+func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	fmt.Println("DEBUG: Starting SCRAM users list operation...")
 
 	// Use the admin client to list SCRAM users
@@ -370,23 +370,12 @@ func (c *Client) ListAcls(ctx context.Context) ([]kmsg.DescribeACLsResponseResou
 		return nil, fmt.Errorf("failed to list SCRAM users: %w", err)
 	}
 
-	// Convert SCRAM users to ACL resources format
-	var resources []kmsg.DescribeACLsResponseResource
+	// Extract usernames
+	var usernames []string
 	for username := range users {
-		resources = append(resources, kmsg.DescribeACLsResponseResource{
-			ResourceType: kmsg.ACLResourceType(12), // User resource type
-			ResourceName: username,
-			ACLs: []kmsg.DescribeACLsResponseResourceACL{
-				{
-					Principal:      "User:" + username,
-					Host:           "*",
-					Operation:      kmsg.ACLOperation(31),     // ALL operation
-					PermissionType: kmsg.ACLPermissionType(3), // ALLOW permission
-				},
-			},
-		})
+		usernames = append(usernames, username)
 	}
 
-	fmt.Printf("DEBUG: Successfully retrieved %d SCRAM users\n", len(resources))
-	return resources, nil
+	fmt.Printf("DEBUG: Successfully retrieved %d SCRAM users\n", len(usernames))
+	return usernames, nil
 }

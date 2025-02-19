@@ -94,27 +94,19 @@ func init() {
 			}
 			defer client.Close()
 
-			acls, err := client.ListAcls(context.Background())
+			users, err := client.ListAcls(context.Background())
 			if err != nil {
-				return fmt.Errorf("failed to list ACLs: %w", err)
+				return fmt.Errorf("failed to list users: %w", err)
 			}
 
-			if len(acls) == 0 {
-				fmt.Println("No ACLs found")
+			if len(users) == 0 {
+				fmt.Println("No users found")
 				return nil
 			}
 
-			fmt.Println("ACLs:")
-			for _, acl := range acls {
-				for _, entry := range acl.ACLs {
-					fmt.Printf("- Resource Type: %v\n", acl.ResourceType)
-					fmt.Printf("  Resource Name: %v\n", acl.ResourceName)
-					fmt.Printf("  Principal: %v\n", entry.Principal)
-					fmt.Printf("  Host: %v\n", entry.Host)
-					fmt.Printf("  Operation: %v\n", entry.Operation)
-					fmt.Printf("  Permission Type: %v\n", entry.PermissionType)
-					fmt.Println()
-				}
+			fmt.Println("Users:")
+			for _, user := range users {
+				fmt.Printf("- %s\n", user)
 			}
 			return nil
 		},
