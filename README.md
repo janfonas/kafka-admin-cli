@@ -14,6 +14,10 @@ Written by Jan Harald Fonås with the help of an LLM.
   - Create ACLs
   - Delete ACLs
   - List ACLs
+- Consumer Group Management
+  - List consumer groups
+  - Get consumer group details (members, assignments, offsets)
+  - Set consumer group offsets
 
 ## Installation
 
@@ -147,3 +151,39 @@ kac acl create \
 3. List all topics with authentication:
 ```bash
 kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret topic list
+```
+
+### Consumer Group Management
+
+List consumer groups:
+```bash
+kac consumergroup list
+```
+
+Get consumer group details:
+```bash
+kac consumergroup get my-group-id
+```
+
+Set consumer group offsets:
+```bash
+kac consumergroup set-offsets my-group-id my-topic --partition 0 --offset 1000
+```
+
+Example output for consumer group details:
+```
+Group ID: my-group-id
+State: Stable
+
+Members:
+  Client ID: consumer-1
+  Client Host: consumer-1.example.com
+  Assignments:
+    Topic: my-topic
+    Partitions: [0, 1, 2]
+
+Offsets:
+  Topic: my-topic
+    Partition 0: Current=1000, End=1500, Lag=500
+    Partition 1: Current=2000, End=2500, Lag=500
+    Partition 2: Current=3000, End=3500, Lag=500
