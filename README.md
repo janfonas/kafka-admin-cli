@@ -55,6 +55,7 @@ This will create a `kac` binary in the current directory. The build script:
 - `--password, -w`: SASL password
 - `--ca-cert`: Path to CA certificate file for TLS connections
 - `--sasl-mechanism`: SASL mechanism (SCRAM-SHA-512 or PLAIN) (default: SCRAM-SHA-512)
+- `--insecure`: Skip TLS certificate verification
 
 ### Topic Management
 
@@ -128,6 +129,9 @@ kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-
 
 # Using authentication with custom CA certificate
 kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --sasl-mechanism PLAIN --ca-cert /path/to/ca.crt topic list
+
+# Using authentication with self-signed certificates
+kac --brokers kafka1:9092,kafka2:9092 --username alice --password secret --insecure topic list
 ```
 
 ## Examples

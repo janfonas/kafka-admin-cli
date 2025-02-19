@@ -24,7 +24,7 @@ func init() {
 		Use:   "create",
 		Short: "Create a new ACL",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -56,7 +56,7 @@ func init() {
 		Use:   "delete",
 		Short: "Delete an ACL",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -88,7 +88,7 @@ func init() {
 		Use:   "list",
 		Short: "List all ACLs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
@@ -117,7 +117,7 @@ func init() {
 		Use:   "get",
 		Short: "Get ACL details",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism)
+			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
 			if err != nil {
 				return fmt.Errorf("failed to create Kafka client: %w", err)
 			}
