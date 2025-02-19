@@ -5,14 +5,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
@@ -20,7 +19,8 @@ import (
 )
 
 type Client struct {
-	client *kgo.Client
+	client      *kgo.Client
+	adminClient *kadm.Client
 }
 
 func NewClient(brokers []string, username, password, caCertPath, saslMechanism string) (*Client, error) {
@@ -92,7 +92,10 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
 	}
 
-	return &Client{client: client}, nil
+	return &Client{
+		client:      client,
+		adminClient: kadm.NewClient(client),
+	}, nil
 }
 
 func (c *Client) Close() {
@@ -358,47 +361,21 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 }
 
 func (c *Client) ListAcls(ctx context.Context) ([]kmsg.DescribeACLsResponseResource, error) {
-	// Create a context with timeout
-	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
 	fmt.Println("DEBUG: Starting ACL list operation...")
+
+	// Use the low-level kmsg API directly since we need the specific response format
 	req := &kmsg.DescribeACLsRequest{}
-
-	// Create a channel for the response
-	respChan := make(chan struct {
-		resp *kmsg.DescribeACLsResponse
-		err  error
-	})
-
-	// Make the request in a goroutine
-	go func() {
-		fmt.Println("DEBUG: Making ACL list request...")
-		resp, err := req.RequestWith(timeoutCtx, c.client)
-		respChan <- struct {
-			resp *kmsg.DescribeACLsResponse
-			err  error
-		}{resp, err}
-	}()
-
-	// Wait for response or timeout
-	select {
-	case result := <-respChan:
-		if result.err != nil {
-			fmt.Printf("DEBUG: ACL list error: %v\n", result.err)
-			if result.err == io.EOF {
-				return nil, fmt.Errorf("connection closed unexpectedly (EOF). This might be due to network issues or server configuration")
-			}
-			return nil, fmt.Errorf("failed to list ACLs: %w", result.err)
-		}
-		if result.resp.ErrorCode != 0 {
-			fmt.Printf("DEBUG: ACL list error code: %v\n", result.resp.ErrorCode)
-			return nil, fmt.Errorf("failed to list ACLs: error code %v", result.resp.ErrorCode)
-		}
-		fmt.Printf("DEBUG: Successfully retrieved %d ACL resources\n", len(result.resp.Resources))
-		return result.resp.Resources, nil
-	case <-timeoutCtx.Done():
-		fmt.Println("DEBUG: ACL list operation timed out")
-		return nil, fmt.Errorf("operation timed out after 30 seconds")
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		fmt.Printf("DEBUG: ACL list error: %v\n", err)
+		return nil, fmt.Errorf("failed to list ACLs: %w", err)
 	}
+
+	if resp.ErrorCode != 0 {
+		fmt.Printf("DEBUG: ACL list error code: %v\n", resp.ErrorCode)
+		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
+	}
+
+	fmt.Printf("DEBUG: Successfully retrieved %d ACL resources\n", len(resp.Resources))
+	return resp.Resources, nil
 }
