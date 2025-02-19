@@ -22,7 +22,7 @@ func init() {
 	// Create ACL command
 	createAclCmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create a new ACL",
+		Short: "Create a new ACL *experimental*",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := kafka.NewClient(brokers, username, password, caCertPath, saslMechanism, insecure)
 			if err != nil {
