@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -83,11 +84,16 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		return (&tls.Dialer{Config: tlsConfig}).DialContext(ctx, network, host)
 	}
 
-	client, err := kgo.NewClient(
+	opts := []kgo.Opt{
 		kgo.SeedBrokers(seeds...),
 		saslOption,
 		kgo.Dialer(dialer),
-	)
+		kgo.RequestTimeoutOverhead(time.Second * 5),
+		kgo.MetadataMinAge(time.Second * 5),
+		kgo.MetadataMaxAge(time.Second * 10),
+	}
+
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
 	}
@@ -363,8 +369,23 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	fmt.Println("DEBUG: Starting SCRAM users list operation...")
 
-	// Use the admin client to list SCRAM users
-	users, err := c.adminClient.DescribeUserSCRAMs(ctx)
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Use the admin client to list SCRAM users with retries
+	var users map[string]kadm.DescribedUserSCRAM
+	var err error
+	for retries := 3; retries > 0; retries-- {
+		users, err = c.adminClient.DescribeUserSCRAMs(ctx)
+		if err == nil {
+			break
+		}
+		if retries > 1 {
+			fmt.Printf("DEBUG: Retry %d after error: %v\n", 4-retries, err)
+			time.Sleep(time.Second)
+		}
+	}
 	if err != nil {
 		fmt.Printf("DEBUG: SCRAM users list error: %v\n", err)
 		return nil, fmt.Errorf("failed to list SCRAM users: %w", err)
