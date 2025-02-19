@@ -131,6 +131,10 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 		switch resp.Topics[0].ErrorCode {
 		case 3:
 			return fmt.Errorf("topic does not exist: %s", topic)
+		case 7:
+			// Error code 7 during deletion usually means the topic is already being deleted
+			// or the operation was successful but the metadata is still being updated
+			return nil
 		case 41:
 			return fmt.Errorf("topic name is invalid")
 		default:
