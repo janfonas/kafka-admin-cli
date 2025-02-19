@@ -13,6 +13,7 @@ var (
 	password      string
 	caCertPath    string
 	saslMechanism string
+	insecure      bool
 )
 
 var version = "dev"
@@ -31,6 +32,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&password, "password", "w", "", "SASL password")
 	rootCmd.PersistentFlags().StringVar(&caCertPath, "ca-cert", "", "Path to CA certificate file for TLS connections")
 	rootCmd.PersistentFlags().StringVar(&saslMechanism, "sasl-mechanism", "SCRAM-SHA-512", "SASL mechanism (SCRAM-SHA-512 or PLAIN)")
+	rootCmd.PersistentFlags().BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification")
 }
 
 func Execute() {

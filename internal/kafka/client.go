@@ -24,7 +24,7 @@ type Client struct {
 	adminClient *kadm.Client
 }
 
-func NewClient(brokers []string, username, password, caCertPath, saslMechanism string) (*Client, error) {
+func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
 	var saslOption kgo.Opt
 	switch strings.ToUpper(saslMechanism) {
 	case "SCRAM-SHA-512":
@@ -74,10 +74,13 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		}
 
 		tlsConfig = &tls.Config{
-			RootCAs: caCertPool,
+			RootCAs:            caCertPool,
+			InsecureSkipVerify: insecure,
 		}
 	} else {
-		tlsConfig = &tls.Config{}
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: insecure,
+		}
 	}
 
 	dialer := func(ctx context.Context, network, host string) (net.Conn, error) {
