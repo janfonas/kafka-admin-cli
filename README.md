@@ -196,11 +196,17 @@ The build script (`build.sh`) provides:
 - Stripped debug information for smaller binary size
 - Dependency management with `go mod tidy`
 
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
 ## Credits
+
+Copyright 2024 Jan Harald Fonås
 
 Created by Jan Harald Fonås with the assistance of an LLM.
 
 ### Built Using
-- [franz-go](https://github.com/twmb/franz-go) - A feature-complete, pure Go Kafka client
-- [cobra](https://github.com/spf13/cobra) - A library for creating powerful modern CLI applications
+- [franz-go](https://github.com/twmb/franz-go) - A feature-complete, pure Go Kafka client (Apache-2.0)
+- [cobra](https://github.com/spf13/cobra) - A library for creating powerful modern CLI applications (Apache-2.0)
 - [kcat](https://github.com/edenhill/kcat) - Inspiration for the CLI design and functionality
