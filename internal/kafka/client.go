@@ -17,17 +17,24 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 )
 
-// kafkaClient defines the interface for Kafka client operations
+// kafkaClient defines the interface for Kafka client operations.
+// Implements the kmsg.Requestor interface for making Kafka protocol requests
+// and provides a Close method for cleanup.
 type kafkaClient interface {
 	kmsg.Requestor
 	Close()
 }
 
+// Client Represents a Kafka client with both basic client functionality
+// and administrative capabilities through the admin client.
 type Client struct {
 	client      kafkaClient
 	adminClient *kadm.Client
 }
 
+// NewClient Creates a new Kafka client with the specified configuration.
+// Supports SASL authentication (SCRAM-SHA-512 and PLAIN) and TLS encryption.
+// The client is configured with appropriate timeouts and metadata refresh intervals.
 func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
 	var saslOption kgo.Opt
 	if err := validateSASLMechanism(saslMechanism); err != nil {
@@ -101,6 +108,7 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 	}, nil
 }
 
+// Close Closes the Kafka client connection and cleans up resources.
 func (c *Client) Close() {
 	c.client.Close()
 }

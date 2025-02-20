@@ -7,24 +7,31 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// ConsumerGroupMember Contains information about a member of a consumer group,
+// including their client ID, host, and partition assignments.
 type ConsumerGroupMember struct {
 	ClientID    string
 	ClientHost  string
 	Assignments map[string][]int32 // topic -> partitions
 }
 
+// PartitionOffset Contains offset information for a partition,
+// including current position, end offset, and the lag.
 type PartitionOffset struct {
 	Current int64
 	End     int64
 	Lag     int64
 }
 
+// ConsumerGroupDetails Contains detailed information about a consumer group,
+// including its state, members, and offset information for all partitions.
 type ConsumerGroupDetails struct {
 	State   string
 	Members []ConsumerGroupMember
 	Offsets map[string]map[int32]PartitionOffset // topic -> partition -> offset
 }
 
+// ListConsumerGroups Returns a list of all consumer group IDs in the cluster.
 func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
 	req := &kmsg.ListGroupsRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
@@ -39,6 +46,9 @@ func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
 	return groups, nil
 }
 
+// GetConsumerGroup Retrieves detailed information about a specific consumer group.
+// Returns information about the group's state, members, and their partition assignments,
+// as well as current offset positions and lag for each partition.
 func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*ConsumerGroupDetails, error) {
 	// Get group description
 	descReq := &kmsg.DescribeGroupsRequest{
@@ -140,6 +150,9 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 	}, nil
 }
 
+// SetConsumerGroupOffsets Updates the committed offset for a specific partition
+// in a consumer group. This can be used to reset a consumer group's position
+// or to skip over problematic messages.
 func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic string, partition int32, offset int64) error {
 	req := &kmsg.OffsetCommitRequest{
 		Group: groupID,
@@ -167,6 +180,8 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 	return nil
 }
 
+// handleConsumerGroupError Processes error codes from consumer group operations
+// and returns appropriate error messages.
 func handleConsumerGroupError(errorCode int16) error {
 	if errorCode != 0 {
 		switch errorCode {

@@ -10,6 +10,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// CreateAcl Creates a new Access Control List (ACL) entry in Kafka.
+// Parameters include resource type (e.g., topic), resource name, principal (user),
+// host, operation (e.g., read, write), and permission type (allow/deny).
 func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string) error {
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
@@ -43,6 +46,8 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 	return handleACLCreateError(resp)
 }
 
+// DeleteAcl Removes an existing ACL entry from Kafka.
+// The parameters must match exactly with an existing ACL entry for it to be deleted.
 func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string) error {
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
@@ -86,6 +91,9 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 	return nil
 }
 
+// ModifyAcl Updates an existing ACL entry by deleting it and creating a new one
+// with the updated permission. This is used to change the permission type (allow/deny)
+// while keeping all other ACL parameters the same.
 func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string, newPermission string) error {
 	// First delete the existing ACL
 	err := c.DeleteAcl(ctx, resourceType, resourceName, principal, host, operation, permission)
@@ -102,6 +110,8 @@ func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, prin
 	return nil
 }
 
+// GetAcl Retrieves ACL entries matching the specified resource type, name, and principal.
+// Returns a list of ACL resources that match the criteria.
 func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
@@ -126,6 +136,8 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 	return resp.Resources, nil
 }
 
+// ListAcls Returns a list of all unique principals (users) that have ACLs defined.
+// The list only includes principals with the "User:" prefix.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -158,6 +170,8 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	return principals, nil
 }
 
+// handleACLCreateError Processes error codes from ACL creation requests
+// and returns appropriate error messages.
 func handleACLCreateError(resp *kmsg.CreateACLsResponse) error {
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
 		switch resp.Results[0].ErrorCode {
