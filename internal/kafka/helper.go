@@ -10,6 +10,8 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
+// parseURL Parses a broker address string into a valid Kafka broker URL with port.
+// If no port is specified, defaults to 9092. Handles IPv6 addresses by wrapping them in brackets.
 func parseURL(broker string) (string, error) {
 	if broker == "" {
 		return "", fmt.Errorf("empty broker address")
@@ -31,6 +33,8 @@ func parseURL(broker string) (string, error) {
 	return fmt.Sprintf("%s:%s", hostname, u.Port()), nil
 }
 
+// validateSASLMechanism Validates if the provided SASL mechanism is supported.
+// Currently supports SCRAM-SHA-512 and PLAIN authentication mechanisms.
 func validateSASLMechanism(mechanism string) error {
 	switch mechanism {
 	case "SCRAM-SHA-512", "PLAIN":
@@ -40,6 +44,8 @@ func validateSASLMechanism(mechanism string) error {
 	}
 }
 
+// configureSASL Creates a SASL authentication mechanism based on the provided credentials.
+// Returns either a SCRAM-SHA-512 or PLAIN authenticator depending on the mechanism parameter.
 func configureSASL(username, password, mechanism string) (interface{}, error) {
 	if username == "" {
 		return nil, fmt.Errorf("username is required")

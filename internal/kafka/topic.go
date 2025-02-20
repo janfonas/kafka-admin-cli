@@ -7,6 +7,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// TopicDetails Contains metadata about a Kafka topic including its name,
+// number of partitions, replication factor, and configuration settings.
 type TopicDetails struct {
 	Name              string
 	Partitions        int32
@@ -14,6 +16,9 @@ type TopicDetails struct {
 	Config            map[string]string
 }
 
+// CreateTopic Creates a new Kafka topic with the specified name, number of partitions,
+// and replication factor. Returns an error if the topic already exists or if the
+// parameters are invalid.
 func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, replicationFactor int) error {
 	req := &kmsg.CreateTopicsRequest{
 		Topics: []kmsg.CreateTopicsRequestTopic{
@@ -31,6 +36,8 @@ func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, 
 	return handleTopicCreateError(resp, topic, partitions, replicationFactor)
 }
 
+// DeleteTopic Deletes a Kafka topic with the specified name.
+// Returns an error if the topic doesn't exist or if the name is invalid.
 func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 	topicPtr := topic
 	req := &kmsg.DeleteTopicsRequest{
@@ -61,6 +68,8 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 	return nil
 }
 
+// ModifyTopic Updates the configuration of an existing Kafka topic.
+// The config parameter is a map of configuration keys and their new values.
 func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[string]string) error {
 	req := &kmsg.AlterConfigsRequest{
 		Resources: []kmsg.AlterConfigsRequestResource{
@@ -100,6 +109,8 @@ func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[strin
 	return nil
 }
 
+// GetTopic Retrieves detailed information about a specific Kafka topic.
+// Returns a TopicDetails struct containing the topic's metadata and configuration.
 func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, error) {
 	req := &kmsg.MetadataRequest{
 		Topics: []kmsg.MetadataRequestTopic{
@@ -161,6 +172,7 @@ func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, err
 	return details, nil
 }
 
+// ListTopics Returns a list of all topic names in the Kafka cluster.
 func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
 	req := &kmsg.MetadataRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
@@ -176,6 +188,8 @@ func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
 	return topics, nil
 }
 
+// handleTopicCreateError Processes error codes from topic creation requests
+// and returns appropriate error messages.
 func handleTopicCreateError(resp *kmsg.CreateTopicsResponse, topic string, partitions, replicationFactor int) error {
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
 		switch resp.Topics[0].ErrorCode {
