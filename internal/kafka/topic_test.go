@@ -143,9 +143,7 @@ func TestModifyTopic(t *testing.T) {
 				},
 			})
 
-			client := &Client{
-				client: mockClient,
-			}
+			client := NewClientWithMock(mockClient)
 
 			err := client.ModifyTopic(context.Background(), tt.topic, tt.config)
 			if tt.wantError {
