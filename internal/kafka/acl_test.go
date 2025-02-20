@@ -166,3 +166,96 @@ func TestModifyACL(t *testing.T) {
 		})
 	}
 }
+
+func TestListACLs(t *testing.T) {
+	tests := []struct {
+		name           string
+		errorCode      int16
+		resources      []kmsg.DescribeACLsResponseResource
+		wantError      bool
+		errorMsg       string
+		wantPrincipals []string
+	}{
+		{
+			name:      "success",
+			errorCode: 0,
+			resources: []kmsg.DescribeACLsResponseResource{
+				{
+					ResourceType: kmsg.ACLResourceTypeTopic,
+					ResourceName: "test-topic",
+					ACLs: []kmsg.DescribeACLsResponseResourceACL{
+						{Principal: "User:alice"},
+						{Principal: "User:bob"},
+					},
+				},
+				{
+					ResourceType: kmsg.ACLResourceTypeGroup,
+					ResourceName: "test-group",
+					ACLs: []kmsg.DescribeACLsResponseResourceACL{
+						{Principal: "User:alice"},
+						{Principal: "User:charlie"},
+					},
+				},
+			},
+			wantError:      false,
+			wantPrincipals: []string{"User:alice", "User:bob", "User:charlie"},
+		},
+		{
+			name:      "error response",
+			errorCode: 50,
+			resources: nil,
+			wantError: true,
+			errorMsg:  "failed to list ACLs: error code 50",
+		},
+		{
+			name:           "no ACLs",
+			errorCode:      0,
+			resources:      []kmsg.DescribeACLsResponseResource{},
+			wantError:      false,
+			wantPrincipals: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := newMockClient(
+				&kmsg.DescribeACLsResponse{
+					ErrorCode: tt.errorCode,
+					Resources: tt.resources,
+				},
+			)
+
+			client := NewClientWithMock(mockClient)
+
+			principals, err := client.ListAcls(context.Background())
+			if tt.wantError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				if err.Error() != tt.errorMsg {
+					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+
+				// Check if we got all expected principals
+				principalMap := make(map[string]struct{})
+				for _, p := range principals {
+					principalMap[p] = struct{}{}
+				}
+				for _, want := range tt.wantPrincipals {
+					if _, ok := principalMap[want]; !ok {
+						t.Errorf("missing expected principal %q", want)
+					}
+				}
+
+				// Check if we got any unexpected principals
+				if len(principals) != len(tt.wantPrincipals) {
+					t.Errorf("got %d principals, want %d", len(principals), len(tt.wantPrincipals))
+				}
+			}
+		})
+	}
+}
