@@ -12,12 +12,19 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 )
 
+// kafkaClient defines the interface for Kafka client operations
+type kafkaClient interface {
+	kmsg.Requestor
+	Close()
+}
+
 type Client struct {
-	client      *kgo.Client
+	client      kafkaClient
 	adminClient *kadm.Client
 }
 
