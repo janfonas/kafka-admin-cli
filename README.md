@@ -59,12 +59,14 @@ kac consumergroup list
 
 ### Topic Management
 - Create topics with custom partitions and replication factors
+- Modify topics
 - Delete topics
 - List all topics
 - View detailed topic configuration
 
-### ACL Management
+### ACL Management (experimental)
 - Create and delete ACLs
+- Modify ACLs
 - List all ACLs
 - View detailed ACL information
 - Support for various resource types and operations
