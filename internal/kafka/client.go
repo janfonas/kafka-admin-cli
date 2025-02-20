@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -32,11 +33,33 @@ type Client struct {
 	adminClient *kadm.Client
 }
 
+// brokerConnect is a callback that is invoked when a connection to a broker is established.
+// It is used to handle connection errors and close the client if necessary.
+type brokerConnect struct {
+	once    sync.Once
+	rClient *kgo.Client
+}
+
+// OnBrokerConnect is invoked when a connection to a broker is established.
+// It is used to handle connection errors and close the client if necessary.
+func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.Duration, conn net.Conn, err error) {
+	bc.once.Do(func() {
+		if err != nil {
+			fmt.Println("Error establishing connection", "error", err)
+			bc.rClient.Close()
+		} else {
+			fmt.Println("Connection established", "broker", meta.Host)
+		}
+	})
+}
+
 // NewClient Creates a new Kafka client with the specified configuration.
 // Supports SASL authentication (SCRAM-SHA-512 and PLAIN) and TLS encryption.
 // The client is configured with appropriate timeouts and metadata refresh intervals.
 func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
 	var saslOption kgo.Opt
+	var bc brokerConnect
+
 	if err := validateSASLMechanism(saslMechanism); err != nil {
 		return nil, err
 	}
@@ -95,6 +118,7 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		kgo.RequestTimeoutOverhead(time.Second * 5),
 		kgo.MetadataMinAge(time.Second * 5),
 		kgo.MetadataMaxAge(time.Second * 10),
+		kgo.WithHooks(&bc),
 	}
 
 	client, err := kgo.NewClient(opts...)
