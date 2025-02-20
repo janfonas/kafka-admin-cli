@@ -29,8 +29,9 @@ type kafkaClient interface {
 // Client Represents a Kafka client with both basic client functionality
 // and administrative capabilities through the admin client.
 type Client struct {
-	client      kafkaClient
+	client      kafkaClient // Using interface for testing
 	adminClient *kadm.Client
+	hooks       *brokerConnect // Store hooks for real client
 }
 
 // brokerConnect is a callback that is invoked when a connection to a broker is established.
@@ -45,10 +46,12 @@ type brokerConnect struct {
 func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.Duration, conn net.Conn, err error) {
 	bc.once.Do(func() {
 		if err != nil {
-			fmt.Println("Error establishing connection", "error", err)
-			bc.rClient.Close()
+			fmt.Printf("Error establishing connection to broker %s: %v\n", meta.Host, err)
+			if bc.rClient != nil {
+				bc.rClient.Close()
+			}
 		} else {
-			fmt.Println("Connection established", "broker", meta.Host)
+			fmt.Printf("Successfully connected to broker %s (took %v)\n", meta.Host, dialDur)
 		}
 	})
 }
@@ -58,7 +61,6 @@ func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.D
 // The client is configured with appropriate timeouts and metadata refresh intervals.
 func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
 	var saslOption kgo.Opt
-	var bc brokerConnect
 
 	if err := validateSASLMechanism(saslMechanism); err != nil {
 		return nil, err
@@ -111,6 +113,9 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		return (&tls.Dialer{Config: tlsConfig}).DialContext(ctx, network, host)
 	}
 
+	// Create the hook first
+	bc := &brokerConnect{}
+
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(seeds...),
 		saslOption,
@@ -118,21 +123,40 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		kgo.RequestTimeoutOverhead(time.Second * 5),
 		kgo.MetadataMinAge(time.Second * 5),
 		kgo.MetadataMaxAge(time.Second * 10),
-		kgo.WithHooks(&bc),
+		kgo.WithHooks(bc),
 	}
 
+	// Create the client
 	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
 	}
 
+	// Set the client reference in the hook
+	bc.rClient = client
+
+	// Create the admin client with the concrete kgo.Client
+	adminClient := kadm.NewClient(client)
+
 	return &Client{
 		client:      client,
-		adminClient: kadm.NewClient(client),
+		adminClient: adminClient,
+		hooks:       bc,
 	}, nil
+}
+
+// NewClientWithMock Creates a new Client with a mock kafka client.
+// This is used for testing purposes.
+func NewClientWithMock(mockClient kafkaClient) *Client {
+	// For testing, we don't need a real admin client since we're mocking the responses
+	return &Client{
+		client: mockClient,
+	}
 }
 
 // Close Closes the Kafka client connection and cleans up resources.
 func (c *Client) Close() {
-	c.client.Close()
+	if c.client != nil {
+		c.client.Close()
+	}
 }

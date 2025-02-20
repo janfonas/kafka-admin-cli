@@ -148,9 +148,7 @@ func TestModifyACL(t *testing.T) {
 				},
 			)
 
-			client := &Client{
-				client: mockClient,
-			}
+			client := NewClientWithMock(mockClient)
 
 			err := client.ModifyAcl(context.Background(), tt.resourceType, tt.resourceName, tt.principal, tt.host, tt.operation, tt.permission, tt.newPermission)
 			if tt.wantError {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
@@ -136,33 +136,34 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 	return resp.Resources, nil
 }
 
-// ListAcls Returns a list of all unique principals (users) that have ACLs defined.
-// The list only includes principals with the "User:" prefix.
+// ListAcls Returns a list of all principals that have ACLs defined.
+// Uses the kadm package's ACLBuilder for better handling of ACL patterns and filters.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req := &kmsg.DescribeACLsRequest{}
-	resp, err := req.RequestWith(ctx, c.client)
+	// Create a new ACL builder without any filters to get all ACLs
+	builder := kadm.NewACLs()
+
+	// Use the admin client's DescribeACLs which handles pagination and concurrent requests
+	resp, err := c.adminClient.DescribeACLs(ctx, builder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ACLs: %w", err)
 	}
 
-	if resp.ErrorCode != 0 {
-		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
-	}
-
+	// Create a map to store unique principals
 	principalSet := make(map[string]struct{})
-	for _, resource := range resp.Resources {
-		for _, acl := range resource.ACLs {
-			if strings.HasPrefix(acl.Principal, "User:") {
-				principal := strings.TrimPrefix(acl.Principal, "User:")
-				principalSet[principal] = struct{}{}
-			}
+
+	// Process each ACL result
+	for _, result := range resp {
+		for _, acl := range result.Described {
+			// Include all principals, not just those with "User:" prefix
+			principalSet[acl.Principal] = struct{}{}
 		}
 	}
 
-	var principals []string
+	// Convert the set to a slice
+	principals := make([]string, 0, len(principalSet))
 	for principal := range principalSet {
 		principals = append(principals, principal)
 	}
