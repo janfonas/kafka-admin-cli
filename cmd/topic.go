@@ -121,6 +121,60 @@ func runTopicDelete(cmd *cobra.Command, args []string) {
 	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s deleted successfully\n", topic)
 }
 
+func runTopicModify(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
+		return
+	}
+
+	ctx := context.Background()
+	topic := args[0]
+
+	// Get flags
+	configStr, _ := cmd.Flags().GetStringSlice("config")
+	config := make(map[string]string)
+	for _, c := range configStr {
+		parts := strings.SplitN(c, "=", 2)
+		if len(parts) != 2 {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid config format %q, expected key=value\n", c)
+			return
+		}
+		config[parts[0]] = parts[1]
+	}
+
+	if len(config) == 0 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: at least one config parameter is required")
+		return
+	}
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Modify topic
+	err = client.ModifyTopic(ctx, topic, config)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s modified successfully\n", topic)
+}
+
 func runTopicGet(cmd *cobra.Command, args []string) {
 	if len(args) < 1 {
 		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
