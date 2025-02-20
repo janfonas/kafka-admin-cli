@@ -11,6 +11,7 @@ type mockClient struct {
 	alterConfigsResponse *kmsg.AlterConfigsResponse
 	createACLsResponse   *kmsg.CreateACLsResponse
 	deleteACLsResponse   *kmsg.DeleteACLsResponse
+	describeACLsResponse *kmsg.DescribeACLsResponse
 }
 
 func (m *mockClient) Request(ctx context.Context, req kmsg.Request) (kmsg.Response, error) {
@@ -25,6 +26,8 @@ func (m *mockClient) RequestWith(ctx context.Context, req kmsg.Request) (kmsg.Re
 		return m.createACLsResponse, nil
 	case *kmsg.DeleteACLsRequest:
 		return m.deleteACLsResponse, nil
+	case *kmsg.DescribeACLsRequest:
+		return m.describeACLsResponse, nil
 	default:
 		return nil, nil
 	}
@@ -43,6 +46,8 @@ func newMockClient(responses ...kmsg.Response) kafkaClient {
 			mock.createACLsResponse = r
 		case *kmsg.DeleteACLsResponse:
 			mock.deleteACLsResponse = r
+		case *kmsg.DescribeACLsResponse:
+			mock.describeACLsResponse = r
 		}
 	}
 	return mock

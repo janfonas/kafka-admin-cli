@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
@@ -137,26 +136,27 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 }
 
 // ListAcls Returns a list of all principals that have ACLs defined.
-// Uses the kadm package's ACLBuilder for better handling of ACL patterns and filters.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Create a new ACL builder without any filters to get all ACLs
-	builder := kadm.NewACLs()
-
-	// Use the admin client's DescribeACLs which handles pagination and concurrent requests
-	resp, err := c.adminClient.DescribeACLs(ctx, builder)
+	// Create a request with no filters to get all ACLs
+	req := &kmsg.DescribeACLsRequest{}
+	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ACLs: %w", err)
+	}
+
+	if resp.ErrorCode != 0 {
+		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
 	}
 
 	// Create a map to store unique principals
 	principalSet := make(map[string]struct{})
 
 	// Process each ACL result
-	for _, result := range resp {
-		for _, acl := range result.Described {
+	for _, resource := range resp.Resources {
+		for _, acl := range resource.ACLs {
 			// Include all principals, not just those with "User:" prefix
 			principalSet[acl.Principal] = struct{}{}
 		}
