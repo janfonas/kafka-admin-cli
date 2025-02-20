@@ -119,6 +119,14 @@ func newTopicCmd() *cobra.Command {
 	createCmd.Flags().IntP("partitions", "p", 1, "Number of partitions")
 	createCmd.Flags().IntP("replication-factor", "r", 1, "Replication factor")
 
+	// Modify command with flags
+	modifyCmd := &cobra.Command{
+		Use:   "modify [topic]",
+		Short: "Modify topic configuration",
+		Run:   runTopicModify,
+	}
+	modifyCmd.Flags().StringSliceP("config", "c", nil, "Topic configuration in format key=value (can be specified multiple times)")
+
 	// Add topic subcommands
 	cmd.AddCommand(
 		&cobra.Command{
@@ -127,6 +135,7 @@ func newTopicCmd() *cobra.Command {
 			Run:   runTopicList,
 		},
 		createCmd,
+		modifyCmd,
 		&cobra.Command{
 			Use:   "delete [topic]",
 			Short: "Delete a topic",
@@ -185,6 +194,20 @@ func newACLCmd() *cobra.Command {
 	getCmd.Flags().String("resource-name", "", "Resource name")
 	getCmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
 
+	// Modify command with flags
+	modifyCmd := &cobra.Command{
+		Use:   "modify",
+		Short: "Modify an ACL",
+		Run:   runACLModify,
+	}
+	modifyCmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
+	modifyCmd.Flags().String("resource-name", "", "Resource name")
+	modifyCmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
+	modifyCmd.Flags().String("host", "*", "Host")
+	modifyCmd.Flags().String("operation", "", "Operation (e.g., READ)")
+	modifyCmd.Flags().String("permission", "", "Current permission (e.g., ALLOW)")
+	modifyCmd.Flags().String("new-permission", "", "New permission (e.g., DENY)")
+
 	// Add ACL subcommands
 	cmd.AddCommand(
 		&cobra.Command{
@@ -193,6 +216,7 @@ func newACLCmd() *cobra.Command {
 			Run:   runACLList,
 		},
 		createCmd,
+		modifyCmd,
 		deleteCmd,
 		getCmd,
 	)

@@ -156,6 +156,61 @@ type TopicDetails struct {
 	Config            map[string]string
 }
 
+func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[string]string) error {
+	req := &kmsg.AlterConfigsRequest{
+		Resources: []kmsg.AlterConfigsRequestResource{
+			{
+				ResourceType: kmsg.ConfigResourceTypeTopic,
+				ResourceName: topic,
+				Configs: func() []kmsg.AlterConfigsRequestResourceConfig {
+					configs := make([]kmsg.AlterConfigsRequestResourceConfig, 0, len(config))
+					for key, value := range config {
+						configs = append(configs, kmsg.AlterConfigsRequestResourceConfig{
+							Name:  key,
+							Value: &value,
+						})
+					}
+					return configs
+				}(),
+			},
+		},
+	}
+
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return fmt.Errorf("failed to modify topic config: %w", err)
+	}
+
+	if len(resp.Resources) > 0 && resp.Resources[0].ErrorCode != 0 {
+		switch resp.Resources[0].ErrorCode {
+		case 3:
+			return fmt.Errorf("topic does not exist: %s", topic)
+		case 41:
+			return fmt.Errorf("topic name is invalid")
+		default:
+			return fmt.Errorf("failed to modify topic config: error code %v", resp.Resources[0].ErrorCode)
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string, newPermission string) error {
+	// First delete the existing ACL
+	err := c.DeleteAcl(ctx, resourceType, resourceName, principal, host, operation, permission)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing ACL: %w", err)
+	}
+
+	// Then create the new ACL with updated permission
+	err = c.CreateAcl(ctx, resourceType, resourceName, principal, host, operation, newPermission)
+	if err != nil {
+		return fmt.Errorf("failed to create new ACL: %w", err)
+	}
+
+	return nil
+}
+
 func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, error) {
 	req := &kmsg.MetadataRequest{
 		Topics: []kmsg.MetadataRequestTopic{
