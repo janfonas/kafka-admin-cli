@@ -32,6 +32,7 @@ type Client struct {
 	client      kafkaClient // Using interface for testing
 	adminClient *kadm.Client
 	hooks       *brokerConnect // Store hooks for real client
+	debug       bool           // Enable debug logging
 }
 
 // brokerConnect is a callback that is invoked when a connection to a broker is established.
@@ -59,7 +60,7 @@ func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.D
 // NewClient Creates a new Kafka client with the specified configuration.
 // Supports SASL authentication (SCRAM-SHA-512 and PLAIN) and TLS encryption.
 // The client is configured with appropriate timeouts and metadata refresh intervals.
-func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
+func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool, debug bool) (*Client, error) {
 	var saslOption kgo.Opt
 
 	if err := validateSASLMechanism(saslMechanism); err != nil {
@@ -142,6 +143,7 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		client:      client,
 		adminClient: adminClient,
 		hooks:       bc,
+		debug:       debug,
 	}, nil
 }
 

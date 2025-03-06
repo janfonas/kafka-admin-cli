@@ -16,6 +16,7 @@ var (
 	caCertPath     string
 	insecure       bool
 	promptPassword bool
+	debug          bool
 )
 
 func init() {
@@ -72,6 +73,7 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 	cmd.PersistentFlags().StringVar(&saslMechanism, "sasl-mechanism", "SCRAM-SHA-512", "SASL mechanism (SCRAM-SHA-512 or PLAIN)")
 	cmd.PersistentFlags().StringVar(&caCertPath, "ca-cert", "", "CA certificate file path")
 	cmd.PersistentFlags().BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification")
+	cmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	return cmd
 }

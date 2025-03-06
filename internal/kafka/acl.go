@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -137,28 +136,71 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 
 // ListAcls Returns a list of all principals that have ACLs defined.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	if c.debug {
+		fmt.Println("DEBUG: Creating ACL list request")
+	}
 
-	// Create a request with no filters to get all ACLs
-	req := &kmsg.DescribeACLsRequest{}
+	// Create a request with specific resource type for topics
+	// This is more specific than using ANY and might be better handled
+	req := &kmsg.DescribeACLsRequest{
+		ResourceType: kmsg.ACLResourceTypeTopic,
+		ResourceName: nil,
+		Principal:    nil,
+		Host:         nil,
+	}
+
+	if c.debug {
+		fmt.Printf("DEBUG: Request details:\n")
+		fmt.Printf("  ResourceType: %v\n", req.ResourceType)
+		fmt.Printf("  ResourceName: %v\n", req.ResourceName)
+		fmt.Printf("  Principal: %v\n", req.Principal)
+		fmt.Printf("  Host: %v\n", req.Host)
+		fmt.Printf("  Operation: %v\n", req.Operation)
+		fmt.Printf("  PermissionType: %v\n", req.PermissionType)
+	}
+
+	if c.debug {
+		fmt.Println("DEBUG: Attempting to send request to broker")
+	}
+
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
+		if c.debug {
+			fmt.Printf("DEBUG: Request failed with error: %v\n", err)
+		}
 		return nil, fmt.Errorf("failed to list ACLs: %w", err)
 	}
 
+	if c.debug {
+		fmt.Printf("DEBUG: Received response with error code: %v\n", resp.ErrorCode)
+	}
+
 	if resp.ErrorCode != 0 {
+		if c.debug {
+			fmt.Printf("DEBUG: Response indicates error: code=%v\n", resp.ErrorCode)
+		}
 		return nil, fmt.Errorf("failed to list ACLs: error code %v", resp.ErrorCode)
+	}
+
+	if c.debug {
+		fmt.Printf("DEBUG: Processing response with %d resources\n", len(resp.Resources))
 	}
 
 	// Create a map to store unique principals
 	principalSet := make(map[string]struct{})
 
-	// Process each ACL result
-	for _, resource := range resp.Resources {
+	// Process each ACL resource
+	for i, resource := range resp.Resources {
+		if c.debug {
+			fmt.Printf("DEBUG: Processing resource %d with %d ACLs\n", i+1, len(resource.ACLs))
+		}
 		for _, acl := range resource.ACLs {
-			// Include all principals, not just those with "User:" prefix
-			principalSet[acl.Principal] = struct{}{}
+			if acl.Principal != "" {
+				if c.debug {
+					fmt.Printf("DEBUG: Found principal: %s\n", acl.Principal)
+				}
+				principalSet[acl.Principal] = struct{}{}
+			}
 		}
 	}
 
@@ -166,6 +208,10 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	principals := make([]string, 0, len(principalSet))
 	for principal := range principalSet {
 		principals = append(principals, principal)
+	}
+
+	if c.debug {
+		fmt.Printf("DEBUG: Returning %d unique principals\n", len(principals))
 	}
 
 	return principals, nil
