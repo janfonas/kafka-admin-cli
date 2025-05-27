@@ -248,6 +248,11 @@ func newConsumerGroupCmd() *cobra.Command {
 			Short: "Set consumer group offsets",
 			Run:   runConsumerGroupSetOffsets,
 		},
+		&cobra.Command{
+			Use:   "delete [group-id]",
+			Short: "Delete a consumer group",
+			Run:   runConsumerGroupDelete,
+		},
 	)
 
 	return cmd
