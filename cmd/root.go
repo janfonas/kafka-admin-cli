@@ -29,7 +29,40 @@ func initCommands() {
 		newTopicCmd(),
 		newACLCmd(),
 		newConsumerGroupCmd(),
+		newTopicsCmd(),
+		newACLsCmd(),
+		newConsumerGroupsCmd(),
 	)
+}
+
+// newTopicsCmd creates a new command that is an alias for "topic list"
+func newTopicsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "topics",
+		Short: "List Kafka topics (alias for 'topic list')",
+		Run:   runTopicList,
+	}
+	return cmd
+}
+
+// newACLsCmd creates a new command that is an alias for "acl list"
+func newACLsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "acls",
+		Short: "List Kafka ACLs (alias for 'acl list')",
+		Run:   runACLList,
+	}
+	return cmd
+}
+
+// newConsumerGroupsCmd creates a new command that is an alias for "consumergroup list"
+func newConsumerGroupsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "consumergroups",
+		Short: "List Kafka consumer groups (alias for 'consumergroup list')",
+		Run:   runConsumerGroupList,
+	}
+	return cmd
 }
 
 // GetRootCmd returns the root command for use by other packages
