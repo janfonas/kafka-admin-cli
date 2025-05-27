@@ -45,17 +45,15 @@ cd kafka-admin-cli
 ### Basic Usage
 
 ```bash
-# List topics (kubectl-style)
+# List topics
 kac get topics
 
-# Create a topic (kubectl-style)
+# Create a topic
 kac create topic mytopic --partitions 3 --replication-factor 1
 
-# Manage consumer groups (kubectl-style)
+# Manage consumer groups
 kac get consumergroups
 ```
-
-> **Note**: The CLI supports both kubectl-style (verb-first) and legacy (resource-first) command formats. The kubectl-style is recommended for new users.
 
 ## Features
 
@@ -135,7 +133,6 @@ Shows detailed version information including:
 
 ### Topic Commands
 
-#### Kubectl-style (Recommended)
 ```bash
 # Create topic
 kac create topic mytopic --partitions 6 --replication-factor 3
@@ -153,24 +150,8 @@ kac delete topic mytopic
 kac modify topic mytopic --config retention.ms=86400000
 ```
 
-#### Legacy style
-```bash
-# Create topic
-kac topic create mytopic --partitions 6 --replication-factor 3
-
-# List topics
-kac topic list
-
-# Get topic details
-kac topic get mytopic
-
-# Delete topic
-kac topic delete mytopic
-```
-
 ### ACL Commands
 
-#### Kubectl-style (Recommended)
 ```bash
 # Create ACL
 kac create acl \
@@ -208,38 +189,8 @@ kac modify acl \
   --new-permission DENY
 ```
 
-#### Legacy style
-```bash
-# Create ACL
-kac acl create \
-  --resource-type TOPIC \
-  --resource-name mytopic \
-  --principal User:alice \
-  --host "*" \
-  --operation READ \
-  --permission ALLOW
-
-# List ACLs
-kac acl list
-
-# Get ACL details
-kac acl get \
-  --resource-type TOPIC \
-  --resource-name mytopic \
-  --principal User:alice
-
-# Delete ACL
-kac acl delete \
-  --resource-type TOPIC \
-  --resource-name mytopic \
-  --principal User:alice \
-  --operation READ \
-  --permission ALLOW
-```
-
 ### Consumer Group Commands
 
-#### Kubectl-style (Recommended)
 ```bash
 # List all consumer groups
 kac get consumergroups
@@ -252,18 +203,6 @@ kac set-offsets consumergroup my-group-id my-topic 0 1000
 
 # Delete consumer group
 kac delete consumergroup my-group-id
-```
-
-#### Legacy style
-```bash
-# List consumer groups
-kac consumergroup list
-
-# Get group details
-kac consumergroup get my-group-id
-
-# Set group offsets
-kac consumergroup set-offsets my-group-id my-topic 0 1000
 ```
 
 ## Build Information
