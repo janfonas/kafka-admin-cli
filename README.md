@@ -45,15 +45,17 @@ cd kafka-admin-cli
 ### Basic Usage
 
 ```bash
-# List topics
-kac topic list
+# List topics (kubectl-style)
+kac get topics
 
-# Create a topic
-kac topic create mytopic --partitions 3 --replication-factor 1
+# Create a topic (kubectl-style)
+kac create topic mytopic --partitions 3 --replication-factor 1
 
-# Manage consumer groups
-kac consumergroup list
+# Manage consumer groups (kubectl-style)
+kac get consumergroups
 ```
+
+> **Note**: The CLI supports both kubectl-style (verb-first) and legacy (resource-first) command formats. The kubectl-style is recommended for new users.
 
 ## Features
 
@@ -90,20 +92,20 @@ kac consumergroup list
 ### Security Options
 ```bash
 # Using password prompt (recommended)
-kac --brokers kafka1:9092 --username alice --prompt-password topic list
+kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
 # Using password from stdin
-echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password topic list
+echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
 # Using password flag (not recommended)
-kac --brokers kafka1:9092 --username alice --password secret topic list
+kac --brokers kafka1:9092 --username alice --password secret get topics
 
 # Using custom CA certificate
 kac --brokers kafka1:9092 --username alice --prompt-password \
-    --ca-cert /path/to/ca.crt topic list
+    --ca-cert /path/to/ca.crt get topics
 
 # Using self-signed certificates
-kac --brokers kafka1:9092 --username alice --prompt-password --insecure topic list
+kac --brokers kafka1:9092 --username alice --prompt-password --insecure get topics
 ```
 
 ## Command Reference
@@ -132,6 +134,26 @@ Shows detailed version information including:
 - `--insecure`: Skip TLS certificate verification
 
 ### Topic Commands
+
+#### Kubectl-style (Recommended)
+```bash
+# Create topic
+kac create topic mytopic --partitions 6 --replication-factor 3
+
+# List all topics
+kac get topics
+
+# Get specific topic details
+kac get topic mytopic
+
+# Delete topic
+kac delete topic mytopic
+
+# Modify topic configuration
+kac modify topic mytopic --config retention.ms=86400000
+```
+
+#### Legacy style
 ```bash
 # Create topic
 kac topic create mytopic --partitions 6 --replication-factor 3
@@ -147,6 +169,46 @@ kac topic delete mytopic
 ```
 
 ### ACL Commands
+
+#### Kubectl-style (Recommended)
+```bash
+# Create ACL
+kac create acl \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice \
+  --host "*" \
+  --operation READ \
+  --permission ALLOW
+
+# List all ACLs
+kac get acls
+
+# Get specific ACL details
+kac get acl \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice
+
+# Delete ACL
+kac delete acl \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice \
+  --operation READ \
+  --permission ALLOW
+
+# Modify ACL
+kac modify acl \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice \
+  --operation READ \
+  --permission ALLOW \
+  --new-permission DENY
+```
+
+#### Legacy style
 ```bash
 # Create ACL
 kac acl create \
@@ -176,6 +238,23 @@ kac acl delete \
 ```
 
 ### Consumer Group Commands
+
+#### Kubectl-style (Recommended)
+```bash
+# List all consumer groups
+kac get consumergroups
+
+# Get specific group details
+kac get consumergroup my-group-id
+
+# Set consumer group offsets
+kac set-offsets consumergroup my-group-id my-topic 0 1000
+
+# Delete consumer group
+kac delete consumergroup my-group-id
+```
+
+#### Legacy style
 ```bash
 # List consumer groups
 kac consumergroup list
@@ -184,8 +263,7 @@ kac consumergroup list
 kac consumergroup get my-group-id
 
 # Set group offsets
-kac consumergroup set-offsets my-group-id my-topic \
-  --partition 0 --offset 1000
+kac consumergroup set-offsets my-group-id my-topic 0 1000
 ```
 
 ## Build Information

@@ -26,6 +26,13 @@ func init() {
 func initCommands() {
 	rootCmd.AddCommand(
 		newVersionCmd(),
+		// New verb-based commands
+		newGetCmd(),
+		newCreateCmd(),
+		newDeleteCmd(),
+		newModifyCmd(),
+		newSetOffsetsCmd(),
+		// Keep old commands for backward compatibility (deprecated)
 		newTopicCmd(),
 		newACLCmd(),
 		newConsumerGroupCmd(),
