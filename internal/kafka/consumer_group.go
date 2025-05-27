@@ -180,6 +180,36 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 	return nil
 }
 
+// DeleteConsumerGroup Deletes a consumer group with the specified ID.
+// Returns an error if the group doesn't exist or if the operation fails.
+func (c *Client) DeleteConsumerGroup(ctx context.Context, groupID string) error {
+	req := &kmsg.DeleteGroupsRequest{
+		Groups: []string{groupID},
+	}
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return fmt.Errorf("failed to delete consumer group: %w", err)
+	}
+
+	if len(resp.Groups) > 0 && resp.Groups[0].ErrorCode != 0 {
+		switch resp.Groups[0].ErrorCode {
+		case 7:
+			// Error code 7 during deletion usually means the operation was successful
+			// but the metadata is still being updated
+			return nil
+		case 15:
+			return fmt.Errorf("consumer group not found: %s", groupID)
+		case 24:
+			return fmt.Errorf("invalid consumer group id: %s", groupID)
+		case 25:
+			return fmt.Errorf("consumer group is not empty: %s", groupID)
+		default:
+			return fmt.Errorf("failed to delete consumer group: error code %v", resp.Groups[0].ErrorCode)
+		}
+	}
+	return nil
+}
+
 // handleConsumerGroupError Processes error codes from consumer group operations
 // and returns appropriate error messages.
 func handleConsumerGroupError(errorCode int16) error {

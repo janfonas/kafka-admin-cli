@@ -154,3 +154,40 @@ func runConsumerGroupSetOffsets(cmd *cobra.Command, args []string) {
 
 	fmt.Fprintln(cmd.OutOrStdout(), "Consumer group offsets set successfully")
 }
+
+func runConsumerGroupDelete(cmd *cobra.Command, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID is required")
+		return
+	}
+
+	ctx := context.Background()
+	groupID := args[0]
+
+	// Get password if not provided
+	if promptPassword {
+		var err error
+		password, err = getPassword()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+	}
+
+	// Create Kafka client
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+	defer client.Close()
+
+	// Delete consumer group
+	err = client.DeleteConsumerGroup(ctx, groupID)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Consumer group %s deleted successfully\n", groupID)
+}
