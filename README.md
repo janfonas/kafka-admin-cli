@@ -46,13 +46,13 @@ cd kafka-admin-cli
 
 ```bash
 # List topics
-kac topic list
+kac get topics
 
 # Create a topic
-kac topic create mytopic --partitions 3 --replication-factor 1
+kac create topic mytopic --partitions 3 --replication-factor 1
 
 # Manage consumer groups
-kac consumergroup list
+kac get consumergroups
 ```
 
 ## Features
@@ -90,20 +90,20 @@ kac consumergroup list
 ### Security Options
 ```bash
 # Using password prompt (recommended)
-kac --brokers kafka1:9092 --username alice --prompt-password topic list
+kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
 # Using password from stdin
-echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password topic list
+echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
 # Using password flag (not recommended)
-kac --brokers kafka1:9092 --username alice --password secret topic list
+kac --brokers kafka1:9092 --username alice --password secret get topics
 
 # Using custom CA certificate
 kac --brokers kafka1:9092 --username alice --prompt-password \
-    --ca-cert /path/to/ca.crt topic list
+    --ca-cert /path/to/ca.crt get topics
 
 # Using self-signed certificates
-kac --brokers kafka1:9092 --username alice --prompt-password --insecure topic list
+kac --brokers kafka1:9092 --username alice --prompt-password --insecure get topics
 ```
 
 ## Command Reference
@@ -132,24 +132,29 @@ Shows detailed version information including:
 - `--insecure`: Skip TLS certificate verification
 
 ### Topic Commands
+
 ```bash
 # Create topic
-kac topic create mytopic --partitions 6 --replication-factor 3
+kac create topic mytopic --partitions 6 --replication-factor 3
 
-# List topics
-kac topic list
+# List all topics
+kac get topics
 
-# Get topic details
-kac topic get mytopic
+# Get specific topic details
+kac get topic mytopic
 
 # Delete topic
-kac topic delete mytopic
+kac delete topic mytopic
+
+# Modify topic configuration
+kac modify topic mytopic --config retention.ms=86400000
 ```
 
 ### ACL Commands
+
 ```bash
 # Create ACL
-kac acl create \
+kac create acl \
   --resource-type TOPIC \
   --resource-name mytopic \
   --principal User:alice \
@@ -157,35 +162,47 @@ kac acl create \
   --operation READ \
   --permission ALLOW
 
-# List ACLs
-kac acl list
+# List all ACLs
+kac get acls
 
-# Get ACL details
-kac acl get \
+# Get specific ACL details
+kac get acl \
   --resource-type TOPIC \
   --resource-name mytopic \
   --principal User:alice
 
 # Delete ACL
-kac acl delete \
+kac delete acl \
   --resource-type TOPIC \
   --resource-name mytopic \
   --principal User:alice \
   --operation READ \
   --permission ALLOW
+
+# Modify ACL
+kac modify acl \
+  --resource-type TOPIC \
+  --resource-name mytopic \
+  --principal User:alice \
+  --operation READ \
+  --permission ALLOW \
+  --new-permission DENY
 ```
 
 ### Consumer Group Commands
+
 ```bash
-# List consumer groups
-kac consumergroup list
+# List all consumer groups
+kac get consumergroups
 
-# Get group details
-kac consumergroup get my-group-id
+# Get specific group details
+kac get consumergroup my-group-id
 
-# Set group offsets
-kac consumergroup set-offsets my-group-id my-topic \
-  --partition 0 --offset 1000
+# Set consumer group offsets
+kac set-offsets consumergroup my-group-id my-topic 0 1000
+
+# Delete consumer group
+kac delete consumergroup my-group-id
 ```
 
 ## Build Information
