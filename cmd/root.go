@@ -37,6 +37,7 @@ func initCommands() {
 		newSetOffsetsCmd(),
 		newLoginCmd(),
 		newLogoutCmd(),
+		newProfileCmd(),
 	)
 }
 
@@ -61,9 +62,23 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 			return cmd.Help()
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Skip credential loading for login/logout commands
-			if cmd.Name() == "login" || cmd.Name() == "logout" {
+			// Skip credential loading for login/logout/profile commands
+			cmdName := cmd.Name()
+			parentName := ""
+			if cmd.Parent() != nil {
+				parentName = cmd.Parent().Name()
+			}
+			
+			if cmdName == "login" || cmdName == "logout" || cmdName == "profile" || parentName == "profile" {
 				return nil
+			}
+
+			// If no profile flag provided, use active profile
+			if !cmd.Flags().Changed("profile") {
+				activeProfile := credentials.GetActiveProfile()
+				if activeProfile != "" && activeProfile != "default" {
+					profile = activeProfile
+				}
 			}
 
 			// Load from profile if no flags provided and profile exists
