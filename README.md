@@ -87,15 +87,45 @@ kac get consumergroups
 - TLS with custom CA certificates
 - TLS with self-signed certificates
 
-### Security Options
+### Credential Storage (Recommended)
+
+Store your credentials securely in your system's keyring for convenient reuse:
+
 ```bash
-# Using password prompt (recommended)
+# Login and store credentials (uses system keyring - Keychain/Secret Service/Credential Manager)
+kac login --brokers kafka1:9092 --username alice
+# Password will be prompted securely
+
+# Now use commands without credentials
+kac get topics
+kac get consumergroups
+
+# Use named profiles for multiple environments
+kac login --profile prod --brokers prod-kafka:9092 --username alice
+kac login --profile dev --brokers dev-kafka:9092 --username bob
+
+# Use specific profile
+kac --profile prod get topics
+
+# Logout (remove stored credentials)
+kac logout
+kac logout --profile prod
+```
+
+**Security Features:**
+- Credentials are encrypted by your OS (macOS Keychain, Linux Secret Service, Windows Credential Manager)
+- No plaintext passwords in files or command history
+- Supports multiple profiles for different environments
+
+### Security Options (Alternative Methods)
+```bash
+# Using password prompt (good for one-time commands)
 kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
-# Using password from stdin
+# Using password from stdin (good for automation)
 echo "mysecret" | kac --brokers kafka1:9092 --username alice --prompt-password get topics
 
-# Using password flag (not recommended)
+# Using password flag (not recommended - visible in process list)
 kac --brokers kafka1:9092 --username alice --password secret get topics
 
 # Using custom CA certificate
@@ -106,9 +136,35 @@ kac --brokers kafka1:9092 --username alice --prompt-password \
 kac --brokers kafka1:9092 --username alice --prompt-password --insecure get topics
 ```
 
+### Credential Priority Order
+When using stored credentials, the following priority order applies:
+1. Command-line flags (`--brokers`, `--username`, `--password`)
+2. Environment variables (`KAC_BROKERS`, `KAC_USERNAME`, `KAC_PASSWORD`)
+3. Stored profile (from `kac login`)
+4. Interactive prompt (if `--prompt-password` is used)
+
 ## Command Reference
 
 ### Commands
+
+#### Login / Logout
+
+```bash
+# Login and store credentials
+kac login --brokers kafka1:9092 --username alice
+kac login --profile prod --brokers kafka1:9092 --username alice --sasl-mechanism PLAIN
+
+# Logout and remove credentials
+kac logout
+kac logout --profile prod
+```
+
+**Login Options:**
+- `--profile`: Profile name to store credentials under (default: "default")
+- All global connection flags can be used and will be stored
+
+**Logout Options:**
+- `--profile`: Profile name to remove (default: "default")
 
 #### Version
 ```bash
@@ -123,6 +179,7 @@ Shows detailed version information including:
 - OS/Architecture
 
 ### Global Flags
+- `--profile`: Profile name to use for stored credentials (default: "default")
 - `--brokers, -b`: Kafka broker list (comma-separated)
 - `--username, -u`: SASL username
 - `--password, -w`: SASL password (use -P to prompt for password)

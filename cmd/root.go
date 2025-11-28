@@ -3,8 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"syscall"
 
+	"github.com/janfonas/kafka-admin-cli/internal/credentials"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -16,6 +19,7 @@ var (
 	caCertPath     string
 	insecure       bool
 	promptPassword bool
+	profile        string
 )
 
 func init() {
@@ -31,6 +35,8 @@ func initCommands() {
 		newDeleteCmd(),
 		newModifyCmd(),
 		newSetOffsetsCmd(),
+		newLoginCmd(),
+		newLogoutCmd(),
 	)
 }
 
@@ -55,6 +61,23 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 			return cmd.Help()
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Skip credential loading for login/logout commands
+			if cmd.Name() == "login" || cmd.Name() == "logout" {
+				return nil
+			}
+
+			// Load from profile if no flags provided and profile exists
+			if brokers == "" && username == "" && password == "" {
+				if err := loadCredentialsFromProfile(); err != nil {
+					// Only error if profile was explicitly specified
+					if cmd.Flags().Changed("profile") {
+						return err
+					}
+					// Otherwise, continue - user might provide flags via env vars or will get validation error later
+				}
+			}
+
+			// Handle password prompting
 			if promptPassword {
 				var err error
 				password, err = getPassword()
@@ -67,6 +90,7 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 	}
 
 	// Add persistent flags
+	cmd.PersistentFlags().StringVar(&profile, "profile", "default", "Profile name to use for stored credentials")
 	cmd.PersistentFlags().StringVarP(&brokers, "brokers", "b", "", "Kafka broker list (comma-separated)")
 	cmd.PersistentFlags().StringVarP(&username, "username", "u", "", "SASL username")
 	cmd.PersistentFlags().StringVarP(&password, "password", "w", "", "SASL password")
@@ -92,10 +116,41 @@ func getPassword() (string, error) {
 }
 
 func readPassword() (string, error) {
-	// For now, just read from stdin
-	var password string
-	_, err := fmt.Scanln(&password)
-	return password, err
+	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintln(os.Stderr)
+	return string(passwordBytes), nil
+}
+
+func loadCredentialsFromProfile() error {
+	prof, err := credentials.Load(profile)
+	if err != nil {
+		return err
+	}
+
+	// Only set values that weren't provided via flags
+	if brokers == "" {
+		brokers = prof.Brokers
+	}
+	if username == "" {
+		username = prof.Username
+	}
+	if password == "" {
+		password = prof.Password
+	}
+	if saslMechanism == "SCRAM-SHA-512" && prof.SASLMechanism != "" {
+		saslMechanism = prof.SASLMechanism
+	}
+	if caCertPath == "" {
+		caCertPath = prof.CACertPath
+	}
+	if !insecure {
+		insecure = prof.Insecure
+	}
+
+	return nil
 }
 
 func Execute() {
