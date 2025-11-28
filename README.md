@@ -104,8 +104,17 @@ kac get consumergroups
 kac login --profile prod --brokers prod-kafka:9092 --username alice
 kac login --profile dev --brokers dev-kafka:9092 --username bob
 
-# Use specific profile
-kac --profile prod get topics
+# List all stored profiles
+kac profile list
+
+# Switch active profile (will be used by default)
+kac profile switch prod
+
+# Now commands automatically use the 'prod' profile
+kac get topics
+
+# Override with a specific profile for a single command
+kac --profile dev get topics
 
 # Logout (remove stored credentials)
 kac logout
@@ -116,6 +125,7 @@ kac logout --profile prod
 - Credentials are encrypted by your OS (macOS Keychain, Linux Secret Service, Windows Credential Manager)
 - No plaintext passwords in files or command history
 - Supports multiple profiles for different environments
+- Active profile is automatically used when `--profile` flag is not specified
 
 ### Security Options (Alternative Methods)
 ```bash
@@ -139,20 +149,26 @@ kac --brokers kafka1:9092 --username alice --prompt-password --insecure get topi
 ### Credential Priority Order
 When using stored credentials, the following priority order applies:
 1. Command-line flags (`--brokers`, `--username`, `--password`)
-2. Environment variables (`KAC_BROKERS`, `KAC_USERNAME`, `KAC_PASSWORD`)
-3. Stored profile (from `kac login`)
+2. Active profile (set via `kac profile switch`)
+3. Default profile (if `--profile` flag is not specified)
 4. Interactive prompt (if `--prompt-password` is used)
 
 ## Command Reference
 
 ### Commands
 
-#### Login / Logout
+#### Login / Logout / Profile Management
 
 ```bash
 # Login and store credentials
 kac login --brokers kafka1:9092 --username alice
 kac login --profile prod --brokers kafka1:9092 --username alice --sasl-mechanism PLAIN
+
+# List all stored profiles
+kac profile list
+
+# Switch to a different profile (becomes the default)
+kac profile switch prod
 
 # Logout and remove credentials
 kac logout
@@ -162,6 +178,14 @@ kac logout --profile prod
 **Login Options:**
 - `--profile`: Profile name to store credentials under (default: "default")
 - All global connection flags can be used and will be stored
+
+**Profile List:**
+- Shows all stored profiles with their connection details
+- Indicates which profile is currently active with an asterisk (*)
+
+**Profile Switch:**
+- Sets the active profile that will be used by default for all commands
+- The active profile is stored in `~/.kac/active_profile`
 
 **Logout Options:**
 - `--profile`: Profile name to remove (default: "default")
