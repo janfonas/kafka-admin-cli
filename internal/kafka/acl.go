@@ -9,10 +9,16 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// ACLRequestTimeout represents the default timeout for ACL operations
+const ACLRequestTimeout = 10 * time.Second
+
 // CreateAcl Creates a new Access Control List (ACL) entry in Kafka.
 // Parameters include resource type (e.g., topic), resource name, principal (user),
 // host, operation (e.g., read, write), and permission type (allow/deny).
 func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string) error {
+	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
+	defer cancel()
+
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
 		return fmt.Errorf("invalid resource type: %w", err)
@@ -40,7 +46,7 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 	}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		return fmt.Errorf("failed to create ACL: %w", err)
+		return fmt.Errorf("failed to create ACL (timeout=%v): %w", ACLRequestTimeout, err)
 	}
 	return handleACLCreateError(resp)
 }
@@ -48,6 +54,9 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 // DeleteAcl Removes an existing ACL entry from Kafka.
 // The parameters must match exactly with an existing ACL entry for it to be deleted.
 func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string) error {
+	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
+	defer cancel()
+
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
 		return fmt.Errorf("invalid resource type: %w", err)
@@ -75,7 +84,7 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 	}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		return fmt.Errorf("failed to delete ACL: %w", err)
+		return fmt.Errorf("failed to delete ACL (timeout=%v): %w", ACLRequestTimeout, err)
 	}
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
 		switch resp.Results[0].ErrorCode {
@@ -112,6 +121,9 @@ func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, prin
 // GetAcl Retrieves ACL entries matching the specified resource type, name, and principal.
 // Returns a list of ACL resources that match the criteria.
 func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
+	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
+	defer cancel()
+
 	resourceTypeInt, err := strconv.Atoi(resourceType)
 	if err != nil {
 		return nil, fmt.Errorf("invalid resource type: %w", err)
@@ -124,7 +136,7 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 	}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ACL: %w", err)
+		return nil, fmt.Errorf("failed to get ACL (timeout=%v): %w", ACLRequestTimeout, err)
 	}
 	if resp.ErrorCode != 0 {
 		return nil, fmt.Errorf("failed to get ACL: %v", resp.ErrorCode)
@@ -137,14 +149,14 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 
 // ListAcls Returns a list of all principals that have ACLs defined.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
 	// Create a request with no filters to get all ACLs
 	req := &kmsg.DescribeACLsRequest{}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list ACLs: %w", err)
+		return nil, fmt.Errorf("failed to list ACLs (timeout=%v): %w", ACLRequestTimeout, err)
 	}
 
 	if resp.ErrorCode != 0 {
