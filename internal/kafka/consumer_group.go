@@ -18,9 +18,11 @@ type ConsumerGroupMember struct {
 // PartitionOffset Contains offset information for a partition,
 // including current position, end offset, and the lag.
 type PartitionOffset struct {
-	Current int64
-	End     int64
-	Lag     int64
+	Current     int64
+	End         int64
+	Lag         int64
+	IsEmpty     bool   // Indicates if the partition has no messages
+	EndDisplay  string // Human-readable end offset display
 }
 
 // ConsumerGroupDetails Contains detailed information about a consumer group,
@@ -135,10 +137,46 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 		for i, partition := range partitions {
 			current := offsetResp.Topics[0].Partitions[i].Offset
 			end := endOffsetResp.Topics[0].Partitions[i].Offset
+			
+			var lag int64
+			var isEmpty bool
+			var endDisplay string
+			
+			if end == -1 {
+				if current <= 0 {
+					// Truly empty partition: no messages ever produced
+					isEmpty = true
+					endDisplay = "Empty"
+					lag = 0
+				} else {
+					// Compacted partition or consumer caught up at latest offset
+					// Current offset > 0 means messages were consumed before
+					isEmpty = false
+					endDisplay = "At latest"
+					lag = 0 // Consumer is caught up
+				}
+			} else {
+				// Normal case: partition has messages
+				isEmpty = false
+				endDisplay = fmt.Sprintf("%d", end)
+				if current < 0 {
+					// Consumer hasn't committed any offset yet (never consumed)
+					lag = end // All messages are unread
+				} else {
+					// Normal case: calculate actual lag
+					lag = end - current
+					if lag < 0 {
+						lag = 0 // Consumer is ahead (rare edge case)
+					}
+				}
+			}
+			
 			offsets[topic][partition] = PartitionOffset{
-				Current: current,
-				End:     end,
-				Lag:     end - current,
+				Current:    current,
+				End:        end,
+				Lag:        lag,
+				IsEmpty:    isEmpty,
+				EndDisplay: endDisplay,
 			}
 		}
 	}

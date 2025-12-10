@@ -98,9 +98,19 @@ func runConsumerGroupGet(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "  Topic: %s\n", topic)
 		for partition, offset := range partitions {
 			fmt.Fprintf(cmd.OutOrStdout(), "    Partition: %d\n", partition)
-			fmt.Fprintf(cmd.OutOrStdout(), "    Current: %d\n", offset.Current)
-			fmt.Fprintf(cmd.OutOrStdout(), "    End: %d\n", offset.End)
-			fmt.Fprintf(cmd.OutOrStdout(), "    Lag: %d\n", offset.Lag)
+			if offset.Current < 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "    Current: No offset committed\n")
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "    Current: %d\n", offset.Current)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "    End: %s\n", offset.EndDisplay)
+			if offset.IsEmpty {
+				fmt.Fprintf(cmd.OutOrStdout(), "    Lag: 0 (partition is empty)\n")
+			} else if offset.EndDisplay == "At latest" {
+				fmt.Fprintf(cmd.OutOrStdout(), "    Lag: 0 (consumer is caught up)\n")
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "    Lag: %d\n", offset.Lag)
+			}
 		}
 	}
 }
