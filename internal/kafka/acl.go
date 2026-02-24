@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -107,24 +108,33 @@ func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, prin
 	return nil
 }
 
-// GetAcl Retrieves ACL entries matching the specified resource type, name, and principal.
+// GetAcl Retrieves ACL entries matching the specified filters.
+// All parameters are optional — empty strings are treated as "any" (match all).
 // Returns a list of ACL resources that match the criteria.
 func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
 	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
-	resourceTypeInt, err := strconv.Atoi(resourceType)
-	if err != nil {
-		return nil, fmt.Errorf("invalid resource type: %w", err)
-	}
-
 	req := kmsg.NewPtrDescribeACLsRequest()
-	req.ResourceType = kmsg.ACLResourceType(resourceTypeInt)
+	req.ResourceType = kmsg.ACLResourceTypeAny
 	req.ResourcePatternType = kmsg.ACLResourcePatternTypeAny
-	req.ResourceName = &resourceName
-	req.Principal = &principal
 	req.Operation = kmsg.ACLOperationAny
 	req.PermissionType = kmsg.ACLPermissionTypeAny
+
+	if resourceType != "" {
+		resourceTypeInt, err := strconv.Atoi(resourceType)
+		if err != nil {
+			return nil, fmt.Errorf("invalid resource type: %w", err)
+		}
+		req.ResourceType = kmsg.ACLResourceType(resourceTypeInt)
+	}
+	if resourceName != "" {
+		req.ResourceName = &resourceName
+	}
+	if principal != "" {
+		req.Principal = &principal
+	}
+
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ACL (timeout=%v): %w", ACLRequestTimeout, err)
@@ -133,7 +143,21 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 		return nil, formatACLError("get ACL", resp.ErrorCode)
 	}
 	if len(resp.Resources) == 0 {
-		return nil, fmt.Errorf("no ACLs found for resource type %s, name %s, and principal %s", resourceType, resourceName, principal)
+		parts := []string{}
+		if resourceType != "" {
+			parts = append(parts, "resource type "+resourceType)
+		}
+		if resourceName != "" {
+			parts = append(parts, "name "+resourceName)
+		}
+		if principal != "" {
+			parts = append(parts, "principal "+principal)
+		}
+		filter := "the given filters"
+		if len(parts) > 0 {
+			filter = strings.Join(parts, ", ")
+		}
+		return nil, fmt.Errorf("no ACLs found matching %s", filter)
 	}
 	return resp.Resources, nil
 }
