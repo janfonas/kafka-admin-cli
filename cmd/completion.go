@@ -314,3 +314,10 @@ func completeACLResourceNames() func(cmd *cobra.Command, args []string, toComple
 		}
 	}
 }
+
+// completeOutputFormats returns a completion function for the --output flag.
+func completeOutputFormats() func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return validOutputFormats, cobra.ShellCompDirectiveNoFileComp
+	}
+}

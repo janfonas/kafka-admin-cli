@@ -11,6 +11,7 @@ import (
 
 func runACLList(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
+	outputFormat, _ := cmd.Flags().GetString("output")
 
 	// Get password if not provided
 	if promptPassword {
@@ -30,16 +31,25 @@ func runACLList(cmd *cobra.Command, args []string) {
 	}
 	defer client.Close()
 
-	// List ACLs
-	acls, err := client.ListAcls(ctx)
-	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
-	}
-
-	// Print ACLs
-	for _, acl := range acls {
-		fmt.Fprintln(cmd.OutOrStdout(), acl)
+	switch outputFormat {
+	case outputStrimzi:
+		// For strimzi output, fetch full ACL details instead of just principals
+		acls, err := client.GetAcl(ctx, "", "", "")
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+		formatACLStrimzi(cmd.OutOrStdout(), acls)
+	default:
+		// List ACLs (principals only)
+		acls, err := client.ListAcls(ctx)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+		for _, acl := range acls {
+			fmt.Fprintln(cmd.OutOrStdout(), acl)
+		}
 	}
 }
 
@@ -168,6 +178,7 @@ func runACLGet(cmd *cobra.Command, args []string) {
 	resourceType, _ := cmd.Flags().GetString("resource-type")
 	resourceName, _ := cmd.Flags().GetString("resource-name")
 	principal, _ := cmd.Flags().GetString("principal")
+	outputFormat, _ := cmd.Flags().GetString("output")
 
 	// Get password if not provided
 	if promptPassword {
@@ -194,17 +205,10 @@ func runACLGet(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Print ACL details
-	for _, resource := range acls {
-		fmt.Fprintf(cmd.OutOrStdout(), "Resource Type: %v\n", resource.ResourceType)
-		fmt.Fprintf(cmd.OutOrStdout(), "Resource Name: %s\n", resource.ResourceName)
-		fmt.Fprintln(cmd.OutOrStdout(), "ACLs:")
-		for _, acl := range resource.ACLs {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Principal: %s\n", acl.Principal)
-			fmt.Fprintf(cmd.OutOrStdout(), "  Host: %s\n", acl.Host)
-			fmt.Fprintf(cmd.OutOrStdout(), "  Operation: %v\n", acl.Operation)
-			fmt.Fprintf(cmd.OutOrStdout(), "  Permission Type: %v\n", acl.PermissionType)
-			fmt.Fprintln(cmd.OutOrStdout())
-		}
+	switch outputFormat {
+	case outputStrimzi:
+		formatACLStrimzi(cmd.OutOrStdout(), acls)
+	default:
+		formatACLTable(cmd.OutOrStdout(), acls)
 	}
 }

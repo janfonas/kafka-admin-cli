@@ -53,6 +53,8 @@ func newGetACLsCmd() *cobra.Command {
 		Short: "List all Kafka ACLs",
 		Run:   runACLList,
 	}
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
 
@@ -66,8 +68,10 @@ func newGetACLCmd() *cobra.Command {
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")
 	cmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
 	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
 	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
+	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
 
