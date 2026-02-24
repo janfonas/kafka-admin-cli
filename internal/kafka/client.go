@@ -39,6 +39,7 @@ type Client struct {
 type brokerConnect struct {
 	once    sync.Once
 	rClient *kgo.Client
+	quiet   bool
 }
 
 // OnBrokerConnect is invoked when a connection to a broker is established.
@@ -46,11 +47,13 @@ type brokerConnect struct {
 func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.Duration, conn net.Conn, err error) {
 	bc.once.Do(func() {
 		if err != nil {
-			fmt.Printf("Error establishing connection to broker %s: %v\n", meta.Host, err)
+			if !bc.quiet {
+				fmt.Printf("Error establishing connection to broker %s: %v\n", meta.Host, err)
+			}
 			if bc.rClient != nil {
 				bc.rClient.Close()
 			}
-		} else {
+		} else if !bc.quiet {
 			fmt.Printf("Successfully connected to broker %s (took %v)\n", meta.Host, dialDur)
 		}
 	})
@@ -59,7 +62,22 @@ func (bc *brokerConnect) OnBrokerConnect(meta kgo.BrokerMetadata, dialDur time.D
 // NewClient Creates a new Kafka client with the specified configuration.
 // Supports SASL authentication (SCRAM-SHA-512 and PLAIN) and TLS encryption.
 // The client is configured with appropriate timeouts and metadata refresh intervals.
-func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool) (*Client, error) {
+// ClientOption is a functional option for NewClient.
+type ClientOption func(*clientOptions)
+
+type clientOptions struct {
+	quiet bool
+}
+
+// WithQuiet suppresses connection status messages on stdout.
+// Useful when output will be piped to tools like yq or jq.
+func WithQuiet() ClientOption {
+	return func(o *clientOptions) {
+		o.quiet = true
+	}
+}
+
+func NewClient(brokers []string, username, password, caCertPath, saslMechanism string, insecure bool, opts ...ClientOption) (*Client, error) {
 	var saslOption kgo.Opt
 
 	if err := validateSASLMechanism(saslMechanism); err != nil {
@@ -113,10 +131,15 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 		return (&tls.Dialer{Config: tlsConfig}).DialContext(ctx, network, host)
 	}
 
-	// Create the hook first
-	bc := &brokerConnect{}
+	var copts clientOptions
+	for _, o := range opts {
+		o(&copts)
+	}
 
-	opts := []kgo.Opt{
+	// Create the hook first
+	bc := &brokerConnect{quiet: copts.quiet}
+
+	kgoOpts := []kgo.Opt{
 		kgo.SeedBrokers(seeds...),
 		saslOption,
 		kgo.Dialer(dialer),
@@ -127,7 +150,7 @@ func NewClient(brokers []string, username, password, caCertPath, saslMechanism s
 	}
 
 	// Create the client
-	client, err := kgo.NewClient(opts...)
+	client, err := kgo.NewClient(kgoOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
 	}

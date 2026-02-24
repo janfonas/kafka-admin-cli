@@ -118,7 +118,9 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 			if m.key.host != "*" {
 				fmt.Fprintf(w, "        host: %s\n", yamlQuoteIfNeeded(m.key.host))
 			}
-			fmt.Fprintf(w, "        type: %s\n", strimziPermission(m.key.permissionType))
+			if m.key.permissionType != kmsg.ACLPermissionTypeAllow {
+				fmt.Fprintf(w, "        type: %s\n", strimziPermission(m.key.permissionType))
+			}
 		}
 	}
 }

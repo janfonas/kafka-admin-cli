@@ -23,8 +23,12 @@ func runACLList(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Create Kafka client
-	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	// Create Kafka client (suppress status messages for structured output)
+	var clientOpts []kafka.ClientOption
+	if outputFormat != outputTable {
+		clientOpts = append(clientOpts, kafka.WithQuiet())
+	}
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 		return
@@ -190,8 +194,12 @@ func runACLGet(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Create Kafka client
-	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	// Create Kafka client (suppress status messages for structured output)
+	var clientOpts []kafka.ClientOption
+	if outputFormat != outputTable {
+		clientOpts = append(clientOpts, kafka.WithQuiet())
+	}
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 		return

@@ -11,6 +11,7 @@ import (
 
 func runTopicList(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
+	outputFormat, _ := cmd.Flags().GetString("output")
 
 	// Get password if not provided
 	if promptPassword {
@@ -22,24 +23,45 @@ func runTopicList(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Create Kafka client
-	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	// Create Kafka client (suppress status messages for structured output)
+	var clientOpts []kafka.ClientOption
+	if outputFormat != outputTable {
+		clientOpts = append(clientOpts, kafka.WithQuiet())
+	}
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 		return
 	}
 	defer client.Close()
 
-	// List topics
-	topics, err := client.ListTopics(ctx)
-	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
-	}
-
-	// Print topics
-	for _, topic := range topics {
-		fmt.Fprintln(cmd.OutOrStdout(), topic)
+	switch outputFormat {
+	case outputStrimzi:
+		// For strimzi output, fetch full details for each topic
+		names, err := client.ListTopics(ctx)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+		var topics []*kafka.TopicDetails
+		for _, name := range names {
+			details, err := client.GetTopic(ctx, name)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: skipping topic %s: %v\n", name, err)
+				continue
+			}
+			topics = append(topics, details)
+		}
+		formatTopicListStrimzi(cmd.OutOrStdout(), topics)
+	default:
+		topics, err := client.ListTopics(ctx)
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return
+		}
+		for _, topic := range topics {
+			fmt.Fprintln(cmd.OutOrStdout(), topic)
+		}
 	}
 }
 
@@ -183,6 +205,7 @@ func runTopicGet(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	topic := args[0]
+	outputFormat, _ := cmd.Flags().GetString("output")
 
 	// Get password if not provided
 	if promptPassword {
@@ -194,8 +217,12 @@ func runTopicGet(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Create Kafka client
-	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
+	// Create Kafka client (suppress status messages for structured output)
+	var clientOpts []kafka.ClientOption
+	if outputFormat != outputTable {
+		clientOpts = append(clientOpts, kafka.WithQuiet())
+	}
+	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 		return
@@ -209,14 +236,10 @@ func runTopicGet(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Print topic details
-	fmt.Fprintf(cmd.OutOrStdout(), "Name: %s\n", details.Name)
-	fmt.Fprintf(cmd.OutOrStdout(), "Partitions: %d\n", details.Partitions)
-	fmt.Fprintf(cmd.OutOrStdout(), "Replication Factor: %d\n", details.ReplicationFactor)
-	if len(details.Config) > 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "Config:")
-		for k, v := range details.Config {
-			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", k, v)
-		}
+	switch outputFormat {
+	case outputStrimzi:
+		formatTopicStrimzi(cmd.OutOrStdout(), details)
+	default:
+		formatTopicTable(cmd.OutOrStdout(), details)
 	}
 }

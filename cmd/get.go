@@ -31,6 +31,8 @@ func newGetTopicsCmd() *cobra.Command {
 		Short: "List all Kafka topics",
 		Run:   runTopicList,
 	}
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
 
@@ -43,6 +45,8 @@ func newGetTopicCmd() *cobra.Command {
 		Run:               runTopicGet,
 		ValidArgsFunction: completeTopicNames,
 	}
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
 
