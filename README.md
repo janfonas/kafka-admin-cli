@@ -59,17 +59,19 @@ kac get consumergroups
 
 ### Topic Management
 - Create topics with custom partitions and replication factors
-- Modify topics
+- Modify topic configuration
 - Delete topics
 - List all topics
 - View detailed topic configuration
+- Export topics as Strimzi `KafkaTopic` CRD YAML (`-o strimzi`)
 
-### ACL Management (experimental)
+### ACL Management
 - Create and delete ACLs
 - Modify ACLs
 - List all ACLs
-- View detailed ACL information
+- View detailed ACL information with optional filters
 - Support for various resource types and operations
+- Export ACLs as Strimzi `KafkaUser` CRD YAML (`-o strimzi`)
 
 ### Consumer Group Management
 - List all consumer groups
@@ -78,6 +80,32 @@ kac get consumergroups
   - Partition offsets
   - Consumer lag
 - Modify consumer group offsets
+
+### Output Formats
+- **table** (default) — human-readable tabular output
+- **strimzi** — Strimzi CRD YAML manifests, ready to apply with `kubectl`
+
+When using a structured output format (e.g. `strimzi`), connection status messages
+are suppressed so output can be safely piped to tools like `yq` or `kubectl apply`.
+
+### Shell Completion
+Dynamic shell completion for bash, zsh, fish, and PowerShell. Tab-complete topic
+names, consumer group IDs, ACL resource types, principal names, output formats,
+and profile names — all fetched live from your Kafka cluster.
+
+```bash
+# Bash
+source <(kac completion bash)
+
+# Zsh (add to ~/.zshrc)
+source <(kac completion zsh)
+
+# Fish
+kac completion fish | source
+
+# PowerShell
+kac completion powershell | Out-String | Invoke-Expression
+```
 
 ## Authentication and Security
 
@@ -229,6 +257,15 @@ kac delete topic mytopic
 
 # Modify topic configuration
 kac modify topic mytopic --config retention.ms=86400000
+
+# Export a single topic as Strimzi KafkaTopic YAML
+kac get topic mytopic -o strimzi
+
+# Export all topics as Strimzi KafkaTopic YAML (multi-document)
+kac get topics -o strimzi
+
+# Pipe to kubectl
+kac get topic mytopic -o strimzi | kubectl apply -f -
 ```
 
 ### ACL Commands
@@ -243,14 +280,13 @@ kac create acl \
   --operation READ \
   --permission ALLOW
 
-# List all ACLs
+# List all ACL principals
 kac get acls
 
-# Get specific ACL details
-kac get acl \
-  --resource-type TOPIC \
-  --resource-name mytopic \
-  --principal User:alice
+# Get ACL details (all filters are optional)
+kac get acl --principal User:alice
+kac get acl --resource-type TOPIC --resource-name mytopic
+kac get acl --resource-type TOPIC --resource-name mytopic --principal User:alice
 
 # Delete ACL
 kac delete acl \
@@ -268,7 +304,20 @@ kac modify acl \
   --operation READ \
   --permission ALLOW \
   --new-permission DENY
+
+# Export ACLs as Strimzi KafkaUser YAML (one document per principal)
+kac get acl --principal User:alice -o strimzi
+kac get acls -o strimzi
+
+# Pipe to kubectl
+kac get acl --principal User:alice -o strimzi | kubectl apply -f -
 ```
+
+**Output format flag (`-o, --output`):**
+- `table` (default): human-readable text
+- `strimzi`: Strimzi `KafkaUser` CRD YAML with `spec.authorization.acls`.
+  Operations sharing the same resource, host, and permission are merged.
+  The default `type: allow` is omitted since it is the Strimzi default.
 
 ### Consumer Group Commands
 
@@ -300,7 +349,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Credits
 
-Copyright 2024 Jan Harald Fonås
+Copyright 2024-2026 Jan Harald Fonås
 
 Created by Jan Harald Fonås with the assistance of an LLM.
 
