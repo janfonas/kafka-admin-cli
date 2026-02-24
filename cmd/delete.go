@@ -24,10 +24,11 @@ func newDeleteCmd() *cobra.Command {
 // Delete topic
 func newDeleteTopicCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "topic [name]",
-		Short: "Delete a topic",
-		Args:  cobra.ExactArgs(1),
-		Run:   runTopicDelete,
+		Use:               "topic [name]",
+		Short:             "Delete a topic",
+		Args:              cobra.ExactArgs(1),
+		Run:               runTopicDelete,
+		ValidArgsFunction: completeTopicNames,
 	}
 	return cmd
 }
@@ -45,17 +46,22 @@ func newDeleteACLCmd() *cobra.Command {
 	cmd.Flags().String("host", "*", "Host")
 	cmd.Flags().String("operation", "", "Operation (e.g., READ)")
 	cmd.Flags().String("permission", "", "Permission (e.g., ALLOW)")
+	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
+	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
+	_ = cmd.RegisterFlagCompletionFunc("operation", completeACLOperations())
+	_ = cmd.RegisterFlagCompletionFunc("permission", completeACLPermissions())
 	return cmd
 }
 
 // Delete consumer group
 func newDeleteConsumerGroupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "consumergroup [group-id]",
-		Aliases: []string{"cg"},
-		Short:   "Delete a consumer group",
-		Args:    cobra.ExactArgs(1),
-		Run:     runConsumerGroupDelete,
+		Use:               "consumergroup [group-id]",
+		Aliases:           []string{"cg"},
+		Short:             "Delete a consumer group",
+		Args:              cobra.ExactArgs(1),
+		Run:               runConsumerGroupDelete,
+		ValidArgsFunction: completeConsumerGroupIDs,
 	}
 	return cmd
 }

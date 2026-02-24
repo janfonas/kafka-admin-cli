@@ -37,10 +37,11 @@ func newGetTopicsCmd() *cobra.Command {
 // Get specific topic
 func newGetTopicCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "topic [name]",
-		Short: "Get details of a specific topic",
-		Args:  cobra.ExactArgs(1),
-		Run:   runTopicGet,
+		Use:               "topic [name]",
+		Short:             "Get details of a specific topic",
+		Args:              cobra.ExactArgs(1),
+		Run:               runTopicGet,
+		ValidArgsFunction: completeTopicNames,
 	}
 	return cmd
 }
@@ -65,6 +66,8 @@ func newGetACLCmd() *cobra.Command {
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")
 	cmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
+	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
+	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
 	return cmd
 }
 
@@ -82,11 +85,12 @@ func newGetConsumerGroupsCmd() *cobra.Command {
 // Get specific consumer group
 func newGetConsumerGroupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "consumergroup [group-id]",
-		Aliases: []string{"cg"},
-		Short:   "Get consumer group details",
-		Args:    cobra.ExactArgs(1),
-		Run:     runConsumerGroupGet,
+		Use:               "consumergroup [group-id]",
+		Aliases:           []string{"cg"},
+		Short:             "Get consumer group details",
+		Args:              cobra.ExactArgs(1),
+		Run:               runConsumerGroupGet,
+		ValidArgsFunction: completeConsumerGroupIDs,
 	}
 	return cmd
 }

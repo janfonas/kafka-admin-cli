@@ -68,7 +68,7 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 			if cmd.Parent() != nil {
 				parentName = cmd.Parent().Name()
 			}
-			
+
 			if cmdName == "login" || cmdName == "logout" || cmdName == "profile" || parentName == "profile" {
 				return nil
 			}
@@ -113,6 +113,9 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 	cmd.PersistentFlags().StringVar(&saslMechanism, "sasl-mechanism", "SCRAM-SHA-512", "SASL mechanism (SCRAM-SHA-512 or PLAIN)")
 	cmd.PersistentFlags().StringVar(&caCertPath, "ca-cert", "", "CA certificate file path")
 	cmd.PersistentFlags().BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification")
+
+	registerProfileFlagCompletion(cmd)
+	registerSASLMechanismCompletion(cmd)
 
 	return cmd
 }

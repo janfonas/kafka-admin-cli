@@ -27,6 +27,9 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&logoutProfile, "profile", "default", "Profile name to remove")
+	_ = cmd.RegisterFlagCompletionFunc("profile", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeProfileNames(cmd, args, toComplete)
+	})
 
 	return cmd
 }

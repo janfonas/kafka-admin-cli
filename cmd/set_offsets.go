@@ -22,11 +22,12 @@ func newSetOffsetsCmd() *cobra.Command {
 // Set offsets for consumer group
 func newSetOffsetsConsumerGroupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "consumergroup [group-id] [topic] [partition] [offset]",
-		Aliases: []string{"cg"},
-		Short:   "Set consumer group offsets",
-		Args:    cobra.ExactArgs(4),
-		Run:     runConsumerGroupSetOffsets,
+		Use:               "consumergroup [group-id] [topic] [partition] [offset]",
+		Aliases:           []string{"cg"},
+		Short:             "Set consumer group offsets",
+		Args:              cobra.ExactArgs(4),
+		Run:               runConsumerGroupSetOffsets,
+		ValidArgsFunction: completeSetOffsetsArgs,
 	}
 	return cmd
 }

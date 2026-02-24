@@ -23,10 +23,11 @@ func newModifyCmd() *cobra.Command {
 // Modify topic
 func newModifyTopicCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "topic [name]",
-		Short: "Modify topic configuration",
-		Args:  cobra.ExactArgs(1),
-		Run:   runTopicModify,
+		Use:               "topic [name]",
+		Short:             "Modify topic configuration",
+		Args:              cobra.ExactArgs(1),
+		Run:               runTopicModify,
+		ValidArgsFunction: completeTopicNames,
 	}
 	cmd.Flags().StringSliceP("config", "c", nil, "Topic configuration in format key=value (can be specified multiple times)")
 	return cmd
@@ -46,5 +47,10 @@ func newModifyACLCmd() *cobra.Command {
 	cmd.Flags().String("operation", "", "Operation (e.g., READ)")
 	cmd.Flags().String("permission", "", "Current permission (e.g., ALLOW)")
 	cmd.Flags().String("new-permission", "", "New permission (e.g., DENY)")
+	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
+	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
+	_ = cmd.RegisterFlagCompletionFunc("operation", completeACLOperations())
+	_ = cmd.RegisterFlagCompletionFunc("permission", completeACLPermissions())
+	_ = cmd.RegisterFlagCompletionFunc("new-permission", completeACLPermissions())
 	return cmd
 }

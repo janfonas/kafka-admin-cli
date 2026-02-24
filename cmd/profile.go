@@ -56,8 +56,9 @@ Examples:
 
   # Switch to default profile
   kac profile switch default`,
-		Args: cobra.ExactArgs(1),
-		RunE: runProfileSwitch,
+		Args:              cobra.ExactArgs(1),
+		RunE:              runProfileSwitch,
+		ValidArgsFunction: completeProfileNames,
 	}
 
 	return cmd

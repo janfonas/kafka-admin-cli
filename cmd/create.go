@@ -46,5 +46,9 @@ func newCreateACLCmd() *cobra.Command {
 	cmd.Flags().String("host", "*", "Host")
 	cmd.Flags().String("operation", "", "Operation (e.g., READ)")
 	cmd.Flags().String("permission", "", "Permission (e.g., ALLOW)")
+	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
+	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
+	_ = cmd.RegisterFlagCompletionFunc("operation", completeACLOperations())
+	_ = cmd.RegisterFlagCompletionFunc("permission", completeACLPermissions())
 	return cmd
 }
