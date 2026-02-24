@@ -28,13 +28,13 @@ func TestACLErrorHandling(t *testing.T) {
 			name:      "invalid resource",
 			errorCode: 87,
 			wantError: true,
-			errorMsg:  "invalid resource type or name",
+			errorMsg:  "failed to create ACL: invalid resource type or name",
 		},
 		{
 			name:      "invalid principal",
 			errorCode: 88,
 			wantError: true,
-			errorMsg:  "invalid principal format",
+			errorMsg:  "failed to create ACL: invalid principal format",
 		},
 		{
 			name:      "unknown error",
@@ -111,7 +111,7 @@ func TestModifyACL(t *testing.T) {
 			deleteError:   87,
 			createError:   0,
 			wantError:     true,
-			errorMsg:      "failed to delete existing ACL: failed to delete ACL: error code 87",
+			errorMsg:      "failed to delete existing ACL: failed to delete ACL: invalid resource type or name",
 		},
 		{
 			name:          "create error",
@@ -125,7 +125,7 @@ func TestModifyACL(t *testing.T) {
 			deleteError:   0,
 			createError:   88,
 			wantError:     true,
-			errorMsg:      "failed to create new ACL: invalid principal format",
+			errorMsg:      "failed to create new ACL: failed to create ACL: invalid principal format",
 		},
 	}
 

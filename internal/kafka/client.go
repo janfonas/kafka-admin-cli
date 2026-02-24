@@ -160,3 +160,23 @@ func (c *Client) Close() {
 		c.client.Close()
 	}
 }
+
+// CheckAPISupport checks whether the broker supports a specific Kafka API key.
+// Returns (supported, maxVersion, error). This is useful for diagnosing when
+// specific features (like ACLs) are not available on the cluster.
+func (c *Client) CheckAPISupport(ctx context.Context, apiKey int16) (bool, int16, error) {
+	req := kmsg.NewPtrApiVersionsRequest()
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to query API versions: %w", err)
+	}
+	if resp.ErrorCode != 0 {
+		return false, 0, fmt.Errorf("API versions request returned error code %d", resp.ErrorCode)
+	}
+	for _, api := range resp.ApiKeys {
+		if api.ApiKey == apiKey {
+			return true, api.MaxVersion, nil
+		}
+	}
+	return false, 0, nil
+}

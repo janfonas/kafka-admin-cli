@@ -26,6 +26,15 @@ func (m *mockClient) Request(ctx context.Context, req kmsg.Request) (kmsg.Respon
 
 func (m *mockClient) RequestWith(ctx context.Context, req kmsg.Request) (kmsg.Response, error) {
 	switch req.(type) {
+	case *kmsg.ApiVersionsRequest:
+		// Return a response advertising all ACL APIs as supported
+		return &kmsg.ApiVersionsResponse{
+			ApiKeys: []kmsg.ApiVersionsResponseApiKey{
+				{ApiKey: 29, MinVersion: 0, MaxVersion: 3}, // DescribeACLs
+				{ApiKey: 30, MinVersion: 0, MaxVersion: 3}, // CreateACLs
+				{ApiKey: 31, MinVersion: 0, MaxVersion: 3}, // DeleteACLs
+			},
+		}, nil
 	case *kmsg.AlterConfigsRequest:
 		return m.alterConfigsResponse, nil
 	case *kmsg.CreateACLsRequest:
