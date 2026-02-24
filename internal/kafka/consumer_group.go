@@ -18,11 +18,11 @@ type ConsumerGroupMember struct {
 // PartitionOffset Contains offset information for a partition,
 // including current position, end offset, and the lag.
 type PartitionOffset struct {
-	Current     int64
-	End         int64
-	Lag         int64
-	IsEmpty     bool   // Indicates if the partition has no messages
-	EndDisplay  string // Human-readable end offset display
+	Current    int64
+	End        int64
+	Lag        int64
+	IsEmpty    bool   // Indicates if the partition has no messages
+	EndDisplay string // Human-readable end offset display
 }
 
 // ConsumerGroupDetails Contains detailed information about a consumer group,
@@ -35,7 +35,7 @@ type ConsumerGroupDetails struct {
 
 // ListConsumerGroups Returns a list of all consumer group IDs in the cluster.
 func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
-	req := &kmsg.ListGroupsRequest{}
+	req := kmsg.NewPtrListGroupsRequest()
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list consumer groups: %w", err)
@@ -53,9 +53,8 @@ func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
 // as well as current offset positions and lag for each partition.
 func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*ConsumerGroupDetails, error) {
 	// Get group description
-	descReq := &kmsg.DescribeGroupsRequest{
-		Groups: []string{groupID},
-	}
+	descReq := kmsg.NewPtrDescribeGroupsRequest()
+	descReq.Groups = []string{groupID}
 	descResp, err := descReq.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe consumer group: %w", err)
@@ -100,34 +99,44 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 	// Get offsets for all topic partitions
 	offsets := make(map[string]map[int32]PartitionOffset)
 	for topic, partitions := range topicPartitions {
-		offsetReq := &kmsg.OffsetFetchRequest{
-			Group: groupID,
-			Topics: []kmsg.OffsetFetchRequestTopic{{
-				Topic:      topic,
-				Partitions: partitions,
-			}},
-		}
+		// Populate both v0-v7 fields (Group/Topics) and v8+ field (Groups)
+		// so the correct one is serialized regardless of negotiated API version.
+		offsetReqTopic := kmsg.NewOffsetFetchRequestTopic()
+		offsetReqTopic.Topic = topic
+		offsetReqTopic.Partitions = partitions
+
+		offsetReqGroupTopic := kmsg.NewOffsetFetchRequestGroupTopic()
+		offsetReqGroupTopic.Topic = topic
+		offsetReqGroupTopic.Partitions = partitions
+
+		offsetReqGroup := kmsg.NewOffsetFetchRequestGroup()
+		offsetReqGroup.Group = groupID
+		offsetReqGroup.Topics = []kmsg.OffsetFetchRequestGroupTopic{offsetReqGroupTopic}
+
+		offsetReq := kmsg.NewPtrOffsetFetchRequest()
+		offsetReq.Group = groupID                                         // v0-v7
+		offsetReq.Topics = []kmsg.OffsetFetchRequestTopic{offsetReqTopic} // v0-v7
+		offsetReq.Groups = []kmsg.OffsetFetchRequestGroup{offsetReqGroup} // v8+
 		offsetResp, err := offsetReq.RequestWith(ctx, c.client)
 		if err != nil {
 			continue
 		}
 
 		// Get end offsets
-		endOffsetReq := &kmsg.ListOffsetsRequest{
-			Topics: []kmsg.ListOffsetsRequestTopic{{
-				Topic: topic,
-				Partitions: func() []kmsg.ListOffsetsRequestTopicPartition {
-					parts := make([]kmsg.ListOffsetsRequestTopicPartition, len(partitions))
-					for i, p := range partitions {
-						parts[i] = kmsg.ListOffsetsRequestTopicPartition{
-							Partition: p,
-							Timestamp: -1, // Latest offset
-						}
-					}
-					return parts
-				}(),
-			}},
+		endOffsetReqParts := make([]kmsg.ListOffsetsRequestTopicPartition, len(partitions))
+		for i, p := range partitions {
+			part := kmsg.NewListOffsetsRequestTopicPartition()
+			part.Partition = p
+			part.Timestamp = -1 // Latest offset
+			endOffsetReqParts[i] = part
 		}
+
+		endOffsetReqTopic := kmsg.NewListOffsetsRequestTopic()
+		endOffsetReqTopic.Topic = topic
+		endOffsetReqTopic.Partitions = endOffsetReqParts
+
+		endOffsetReq := kmsg.NewPtrListOffsetsRequest()
+		endOffsetReq.Topics = []kmsg.ListOffsetsRequestTopic{endOffsetReqTopic}
 		endOffsetResp, err := endOffsetReq.RequestWith(ctx, c.client)
 		if err != nil {
 			continue
@@ -137,11 +146,11 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 		for i, partition := range partitions {
 			current := offsetResp.Topics[0].Partitions[i].Offset
 			end := endOffsetResp.Topics[0].Partitions[i].Offset
-			
+
 			var lag int64
 			var isEmpty bool
 			var endDisplay string
-			
+
 			if end == -1 {
 				if current <= 0 {
 					// Truly empty partition: no messages ever produced
@@ -170,7 +179,7 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 					}
 				}
 			}
-			
+
 			offsets[topic][partition] = PartitionOffset{
 				Current:    current,
 				End:        end,
@@ -192,16 +201,17 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 // in a consumer group. This can be used to reset a consumer group's position
 // or to skip over problematic messages.
 func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic string, partition int32, offset int64) error {
-	req := &kmsg.OffsetCommitRequest{
-		Group: groupID,
-		Topics: []kmsg.OffsetCommitRequestTopic{{
-			Topic: topic,
-			Partitions: []kmsg.OffsetCommitRequestTopicPartition{{
-				Partition: partition,
-				Offset:    offset,
-			}},
-		}},
-	}
+	offsetPartition := kmsg.NewOffsetCommitRequestTopicPartition()
+	offsetPartition.Partition = partition
+	offsetPartition.Offset = offset
+
+	offsetTopic := kmsg.NewOffsetCommitRequestTopic()
+	offsetTopic.Topic = topic
+	offsetTopic.Partitions = []kmsg.OffsetCommitRequestTopicPartition{offsetPartition}
+
+	req := kmsg.NewPtrOffsetCommitRequest()
+	req.Group = groupID
+	req.Topics = []kmsg.OffsetCommitRequestTopic{offsetTopic}
 
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
@@ -221,9 +231,8 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 // DeleteConsumerGroup Deletes a consumer group with the specified ID.
 // Returns an error if the group doesn't exist or if the operation fails.
 func (c *Client) DeleteConsumerGroup(ctx context.Context, groupID string) error {
-	req := &kmsg.DeleteGroupsRequest{
-		Groups: []string{groupID},
-	}
+	req := kmsg.NewPtrDeleteGroupsRequest()
+	req.Groups = []string{groupID}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return fmt.Errorf("failed to delete consumer group: %w", err)

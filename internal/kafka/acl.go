@@ -32,18 +32,16 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 		return fmt.Errorf("invalid permission: %w", err)
 	}
 
-	req := &kmsg.CreateACLsRequest{
-		Creations: []kmsg.CreateACLsRequestCreation{
-			{
-				ResourceType:   kmsg.ACLResourceType(resourceTypeInt),
-				ResourceName:   resourceName,
-				Principal:      principal,
-				Host:           host,
-				Operation:      kmsg.ACLOperation(operationInt),
-				PermissionType: kmsg.ACLPermissionType(permissionInt),
-			},
-		},
-	}
+	creation := kmsg.NewCreateACLsRequestCreation()
+	creation.ResourceType = kmsg.ACLResourceType(resourceTypeInt)
+	creation.ResourceName = resourceName
+	creation.Principal = principal
+	creation.Host = host
+	creation.Operation = kmsg.ACLOperation(operationInt)
+	creation.PermissionType = kmsg.ACLPermissionType(permissionInt)
+
+	req := kmsg.NewPtrCreateACLsRequest()
+	req.Creations = []kmsg.CreateACLsRequestCreation{creation}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return fmt.Errorf("failed to create ACL (timeout=%v): %w", ACLRequestTimeout, err)
@@ -70,18 +68,16 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 		return fmt.Errorf("invalid permission: %w", err)
 	}
 
-	req := &kmsg.DeleteACLsRequest{
-		Filters: []kmsg.DeleteACLsRequestFilter{
-			{
-				ResourceType:   kmsg.ACLResourceType(resourceTypeInt),
-				ResourceName:   &resourceName,
-				Principal:      &principal,
-				Host:           &host,
-				Operation:      kmsg.ACLOperation(operationInt),
-				PermissionType: kmsg.ACLPermissionType(permissionInt),
-			},
-		},
-	}
+	filter := kmsg.NewDeleteACLsRequestFilter()
+	filter.ResourceType = kmsg.ACLResourceType(resourceTypeInt)
+	filter.ResourceName = &resourceName
+	filter.Principal = &principal
+	filter.Host = &host
+	filter.Operation = kmsg.ACLOperation(operationInt)
+	filter.PermissionType = kmsg.ACLPermissionType(permissionInt)
+
+	req := kmsg.NewPtrDeleteACLsRequest()
+	req.Filters = []kmsg.DeleteACLsRequestFilter{filter}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return fmt.Errorf("failed to delete ACL (timeout=%v): %w", ACLRequestTimeout, err)
@@ -129,11 +125,10 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 		return nil, fmt.Errorf("invalid resource type: %w", err)
 	}
 
-	req := &kmsg.DescribeACLsRequest{
-		ResourceType: kmsg.ACLResourceType(resourceTypeInt),
-		ResourceName: &resourceName,
-		Principal:    &principal,
-	}
+	req := kmsg.NewPtrDescribeACLsRequest()
+	req.ResourceType = kmsg.ACLResourceType(resourceTypeInt)
+	req.ResourceName = &resourceName
+	req.Principal = &principal
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ACL (timeout=%v): %w", ACLRequestTimeout, err)
@@ -153,7 +148,7 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	defer cancel()
 
 	// Create a request with no filters to get all ACLs
-	req := &kmsg.DescribeACLsRequest{}
+	req := kmsg.NewPtrDescribeACLsRequest()
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ACLs (timeout=%v): %w", ACLRequestTimeout, err)

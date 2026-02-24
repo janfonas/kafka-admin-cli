@@ -20,15 +20,14 @@ type TopicDetails struct {
 // and replication factor. Returns an error if the topic already exists or if the
 // parameters are invalid.
 func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, replicationFactor int) error {
-	req := &kmsg.CreateTopicsRequest{
-		Topics: []kmsg.CreateTopicsRequestTopic{
-			{
-				Topic:             topic,
-				NumPartitions:     int32(partitions),
-				ReplicationFactor: int16(replicationFactor),
-			},
-		},
-	}
+	reqTopic := kmsg.NewCreateTopicsRequestTopic()
+	reqTopic.Topic = topic
+	reqTopic.NumPartitions = int32(partitions)
+	reqTopic.ReplicationFactor = int16(replicationFactor)
+
+	req := kmsg.NewPtrCreateTopicsRequest()
+	req.Topics = []kmsg.CreateTopicsRequestTopic{reqTopic}
+
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return fmt.Errorf("failed to create topic: %w", err)
@@ -39,18 +38,20 @@ func (c *Client) CreateTopic(ctx context.Context, topic string, partitions int, 
 // DeleteTopic Deletes a Kafka topic with the specified name.
 // Returns an error if the topic doesn't exist or if the name is invalid.
 func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
-	topicPtr := topic
-	req := &kmsg.DeleteTopicsRequest{
-		Topics: []kmsg.DeleteTopicsRequestTopic{
-			{
-				Topic: &topicPtr,
-			},
-		},
-	}
+	// Populate both TopicNames (v0-v5) and Topics (v6+) so the correct field
+	// is serialized regardless of the API version negotiated with the broker.
+	reqTopic := kmsg.NewDeleteTopicsRequestTopic()
+	reqTopic.Topic = &topic
+
+	req := kmsg.NewPtrDeleteTopicsRequest()
+	req.TopicNames = []string{topic}                       // used when broker negotiates v0-v5
+	req.Topics = []kmsg.DeleteTopicsRequestTopic{reqTopic} // used when broker negotiates v6+
+
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return fmt.Errorf("failed to delete topic: %w", err)
 	}
+	// Response field is always resp.Topics regardless of request version
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
 		switch resp.Topics[0].ErrorCode {
 		case 3:
@@ -71,24 +72,21 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 // ModifyTopic Updates the configuration of an existing Kafka topic.
 // The config parameter is a map of configuration keys and their new values.
 func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[string]string) error {
-	req := &kmsg.AlterConfigsRequest{
-		Resources: []kmsg.AlterConfigsRequestResource{
-			{
-				ResourceType: kmsg.ConfigResourceTypeTopic,
-				ResourceName: topic,
-				Configs: func() []kmsg.AlterConfigsRequestResourceConfig {
-					configs := make([]kmsg.AlterConfigsRequestResourceConfig, 0, len(config))
-					for key, value := range config {
-						configs = append(configs, kmsg.AlterConfigsRequestResourceConfig{
-							Name:  key,
-							Value: &value,
-						})
-					}
-					return configs
-				}(),
-			},
-		},
+	configs := make([]kmsg.AlterConfigsRequestResourceConfig, 0, len(config))
+	for key, value := range config {
+		c := kmsg.NewAlterConfigsRequestResourceConfig()
+		c.Name = key
+		c.Value = &value
+		configs = append(configs, c)
 	}
+
+	resource := kmsg.NewAlterConfigsRequestResource()
+	resource.ResourceType = kmsg.ConfigResourceTypeTopic
+	resource.ResourceName = topic
+	resource.Configs = configs
+
+	req := kmsg.NewPtrAlterConfigsRequest()
+	req.Resources = []kmsg.AlterConfigsRequestResource{resource}
 
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
@@ -112,13 +110,11 @@ func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[strin
 // GetTopic Retrieves detailed information about a specific Kafka topic.
 // Returns a TopicDetails struct containing the topic's metadata and configuration.
 func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, error) {
-	req := &kmsg.MetadataRequest{
-		Topics: []kmsg.MetadataRequestTopic{
-			{
-				Topic: &topic,
-			},
-		},
-	}
+	reqTopic := kmsg.NewMetadataRequestTopic()
+	reqTopic.Topic = &topic
+
+	req := kmsg.NewPtrMetadataRequest()
+	req.Topics = []kmsg.MetadataRequestTopic{reqTopic}
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topic metadata: %w", err)
@@ -138,14 +134,12 @@ func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, err
 	}
 
 	// Get topic configuration
-	configReq := &kmsg.DescribeConfigsRequest{
-		Resources: []kmsg.DescribeConfigsRequestResource{
-			{
-				ResourceType: kmsg.ConfigResourceTypeTopic,
-				ResourceName: topic,
-			},
-		},
-	}
+	configResource := kmsg.NewDescribeConfigsRequestResource()
+	configResource.ResourceType = kmsg.ConfigResourceTypeTopic
+	configResource.ResourceName = topic
+
+	configReq := kmsg.NewPtrDescribeConfigsRequest()
+	configReq.Resources = []kmsg.DescribeConfigsRequestResource{configResource}
 	configResp, err := configReq.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topic config: %w", err)
@@ -174,7 +168,7 @@ func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, err
 
 // ListTopics Returns a list of all topic names in the Kafka cluster.
 func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
-	req := &kmsg.MetadataRequest{}
+	req := kmsg.NewPtrMetadataRequest()
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
