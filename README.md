@@ -351,7 +351,18 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 Copyright 2024-2026 Jan Harald Fonås
 
-Created by Jan Harald Fonås with the assistance of an LLM.
+Created by [Jan Harald Fonås](https://github.com/janfonas) with the assistance of an LLM.
+
+### Contributors
+
+A heartfelt thank you to everyone who has contributed to `kac`:
+
+- [Jan Harald Fonås (@janfonas)](https://github.com/janfonas) — Original author and maintainer.
+- [Robert Goldsmith (@far-blue)](https://github.com/far-blue) — Fixed a subtle but important
+  bug in `GetConsumerGroup` where partition offsets and lag values could be mis-attributed
+  to the wrong partition because the code zipped request and response partitions by array
+  index. Kafka makes no ordering guarantee on response partitions, so the fix matches them
+  by partition ID instead ([PR #1](https://github.com/janfonas/kafka-admin-cli/pull/1)).
 
 ### Built Using
 - [franz-go](https://github.com/twmb/franz-go) - A feature-complete, pure Go Kafka client (Apache-2.0)

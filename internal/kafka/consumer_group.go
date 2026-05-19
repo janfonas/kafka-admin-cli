@@ -142,24 +142,35 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 			continue
 		}
 
+		// Index response partitions by partition ID so lookups below are O(1)
+		// rather than O(N) per partition. Partition-level errors are treated the
+		// same as a missing entry (offset of -1), which downstream logic already
+		// handles as "no committed offset" / "no end offset".
+		currentByPartition := make(map[int32]int64, len(offsetResp.Topics[0].Partitions))
+		for _, respPart := range offsetResp.Topics[0].Partitions {
+			if respPart.ErrorCode != 0 {
+				continue
+			}
+			currentByPartition[respPart.Partition] = respPart.Offset
+		}
+
+		endByPartition := make(map[int32]int64, len(endOffsetResp.Topics[0].Partitions))
+		for _, respPart := range endOffsetResp.Topics[0].Partitions {
+			if respPart.ErrorCode != 0 {
+				continue
+			}
+			endByPartition[respPart.Partition] = respPart.Offset
+		}
+
 		offsets[topic] = make(map[int32]PartitionOffset)
 		for _, partition := range partitions {
-			// Find the corresponding partition in the offset response by partition ID
-			var current int64 = -1
-			for _, respPart := range offsetResp.Topics[0].Partitions {
-				if respPart.Partition == partition {
-					current = respPart.Offset
-					break
-				}
+			current, ok := currentByPartition[partition]
+			if !ok {
+				current = -1
 			}
-
-			// Find the corresponding partition in the end offset response by partition ID
-			var end int64 = -1
-			for _, respPart := range endOffsetResp.Topics[0].Partitions {
-				if respPart.Partition == partition {
-					end = respPart.Offset
-					break
-				}
+			end, ok := endByPartition[partition]
+			if !ok {
+				end = -1
 			}
 
 			var lag int64
