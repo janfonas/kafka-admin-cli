@@ -143,9 +143,24 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 		}
 
 		offsets[topic] = make(map[int32]PartitionOffset)
-		for i, partition := range partitions {
-			current := offsetResp.Topics[0].Partitions[i].Offset
-			end := endOffsetResp.Topics[0].Partitions[i].Offset
+		for _, partition := range partitions {
+			// Find the corresponding partition in the offset response by partition ID
+			var current int64 = -1
+			for _, respPart := range offsetResp.Topics[0].Partitions {
+				if respPart.Partition == partition {
+					current = respPart.Offset
+					break
+				}
+			}
+
+			// Find the corresponding partition in the end offset response by partition ID
+			var end int64 = -1
+			for _, respPart := range endOffsetResp.Topics[0].Partitions {
+				if respPart.Partition == partition {
+					end = respPart.Offset
+					break
+				}
+			}
 
 			var lag int64
 			var isEmpty bool
