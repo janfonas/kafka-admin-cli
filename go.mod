@@ -1,6 +1,6 @@
 module github.com/janfonas/kafka-admin-cli
 
-go 1.24.0
+go 1.26.3
 
 require (
 	github.com/spf13/cobra v1.10.2
