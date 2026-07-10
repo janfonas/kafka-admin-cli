@@ -3,7 +3,8 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - binary: kac
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
