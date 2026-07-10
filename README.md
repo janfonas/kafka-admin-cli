@@ -21,14 +21,14 @@ Download the latest pre-compiled binary for your platform from the [GitHub Relea
 ```bash
 # Linux (x86_64)
 curl -L https://github.com/janfonas/kafka-admin-cli/releases/latest/download/kafka-admin-cli_Linux_x86_64.tar.gz | tar xz
-sudo mv kac /usr/local/bin/
+sudo mv kafka-admin-cli /usr/local/bin/kac
 
 # macOS (Apple Silicon)
 curl -L https://github.com/janfonas/kafka-admin-cli/releases/latest/download/kafka-admin-cli_Darwin_arm64.tar.gz | tar xz
-sudo mv kac /usr/local/bin/
+sudo mv kafka-admin-cli /usr/local/bin/kac
 
 # Windows (x86_64)
-# Download the ZIP file from the releases page and extract kac.exe
+# Download the ZIP file from the releases page and extract kafka-admin-cli.exe
 ```
 
 #### Build from Source
