@@ -272,6 +272,14 @@ kac get topics -o strimzi
 kac get topic mytopic -o strimzi | kubectl apply -f -
 ```
 
+Topic exports retain valid Kubernetes names. Other names are mapped using
+Strimzi's legacy Topic Operator convention: a sanitized prefix followed by `---`
+and a hash of the original name. The original Kafka name is preserved in
+`spec.topicName`, so importing the manifest does not rename the topic. A trailing
+dot exposed by prefix truncation is removed to keep the resource name valid.
+Multiple topics are emitted as YAML documents separated by `---`; name collisions
+cause the export to fail before writing any manifests.
+
 ### ACL Commands
 
 ```bash
@@ -313,6 +321,15 @@ kac modify acl \
 kac get acl --principal User:alice -o strimzi
 kac get acls -o strimzi
 
+# Export ACLs for a TLS principal, preserving the CN-based Kafka identity
+kac get acl --principal 'User:CN=nt-ibm-es-kafka-user' -o strimzi
+
+# Export existing SCRAM-SHA-512 authentication metadata
+kac get acl --principal User:superuser -o strimzi --discover-scram
+
+# Export a mixed user list with Strimzi-managed TLS and discovered SCRAM users
+kac get acls -o strimzi --discover-scram --tls-authentication tls
+
 # Pipe to kubectl
 kac get acl --principal User:alice -o strimzi | kubectl apply -f -
 ```
@@ -322,12 +339,48 @@ kac get acl --principal User:alice -o strimzi | kubectl apply -f -
 - `strimzi`: Strimzi `KafkaUser` CRD YAML with `spec.authorization.acls`.
   Operations sharing the same resource, host, and permission are merged.
   The default `type: allow` is omitted since it is the Strimzi default.
-  Principal names, after removing the `User:` prefix, must be valid Kubernetes
-  DNS subdomain names: at most 253 lowercase letters, digits, hyphens, or dots,
-  with each dot-separated label starting and ending with a letter or digit.
-  Invalid names cause the export to fail without emitting any manifests; names
-  are never silently renamed. Broker-provided strings in both ACL and topic
-  exports are serialized as YAML data, not interpreted as manifest structure.
+  Cluster ACL resources contain only `type: cluster`; Kafka's cluster resource
+  name and pattern type are not fields in the Strimzi cluster ACL schema.
+
+ACL exports produce one document per principal, separated by `---`.
+`User:alice` becomes a KafkaUser named `alice` with authentication omitted.
+`User:CN=nt-ibm-es-kafka-user` becomes a KafkaUser named `nt-ibm-es-kafka-user`
+with `spec.authentication.type: tls-external`. This tells Strimzi to apply ACLs
+to `CN=nt-ibm-es-kafka-user` without generating a new certificate.
+
+**Authentication export options (require `-o strimzi`):**
+- `--tls-authentication tls-external|tls`: selects the authentication type for
+  CN-based principals only. The default is `tls-external`; use `tls` when the
+  Kubernetes operator should manage their certificates, including exports
+  intended for existing operator-managed TLS users. Managed TLS names must
+  be at most 64 characters, matching Strimzi's certificate CN limit.
+- `--discover-scram`: queries Kafka for SCRAM credential metadata for the
+  exported non-TLS usernames. Users with a registered SCRAM-SHA-512 credential
+  receive `authentication.type: scram-sha-512`. Users without SCRAM credentials
+  keep authentication omitted. SCRAM-SHA-256-only or otherwise unsupported
+  mechanisms fail the export, since Strimzi cannot represent them. This requires
+  Kafka 2.7+ and `Describe` permission on the cluster. Unsupported APIs,
+  authorization failures, and incomplete responses are errors, not silent
+  fallbacks. Discovery is disabled by default and never queries unrelated users.
+
+These options describe exported users, not the CLI's connection authentication.
+Kafka ACLs cannot distinguish operator-managed from external certificates.
+SCRAM discovery identifies registered mechanisms, but cannot recover passwords,
+Secret references, or the operator's credential-management configuration.
+Review authentication settings before applying an export: changing them can
+cause the operator to generate or manage credentials. This is an ACL export,
+not a complete backup of existing KafkaUser resources.
+
+The resulting KafkaUser names must be valid Kubernetes DNS subdomain names:
+at most 253 lowercase letters, digits, hyphens, or dots, with each dot-separated
+label starting and ending with a letter or digit. Arbitrary distinguished names
+with additional attributes or escapes are not reduced to their CN, because that
+would change the Kafka identity. Invalid names and collisions such as
+`User:alice` and `User:CN=alice` cause the export to fail before emitting any
+manifests; user identities are never silently renamed or merged.
+
+Broker-provided strings in both ACL and topic exports are serialized as YAML
+data, not interpreted as manifest structure.
 
 ### Consumer Group Commands
 

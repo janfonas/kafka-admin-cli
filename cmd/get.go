@@ -58,6 +58,7 @@ func newGetACLsCmd() *cobra.Command {
 		RunE:  runACLList,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	addACLExportFlags(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
@@ -73,6 +74,7 @@ func newGetACLCmd() *cobra.Command {
 	cmd.Flags().String("resource-name", "", "Resource name")
 	cmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	addACLExportFlags(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
 	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())

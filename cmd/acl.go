@@ -10,8 +10,12 @@ import (
 )
 
 func runACLList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 	outputFormat, _ := cmd.Flags().GetString("output")
+	exportOptions, err := readACLExportOptions(cmd, outputFormat)
+	if err != nil {
+		return err
+	}
 
 	// Get password if not provided
 	if promptPassword {
@@ -40,7 +44,7 @@ func runACLList(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		return formatACLStrimzi(cmd.OutOrStdout(), acls)
+		return exportACLStrimzi(ctx, cmd.OutOrStdout(), client, acls, exportOptions)
 	default:
 		// List ACLs (principals only)
 		acls, err := client.ListAcls(ctx)
@@ -173,13 +177,17 @@ func runACLModify(cmd *cobra.Command, args []string) {
 }
 
 func runACLGet(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// Get flags
 	resourceType, _ := cmd.Flags().GetString("resource-type")
 	resourceName, _ := cmd.Flags().GetString("resource-name")
 	principal, _ := cmd.Flags().GetString("principal")
 	outputFormat, _ := cmd.Flags().GetString("output")
+	exportOptions, err := readACLExportOptions(cmd, outputFormat)
+	if err != nil {
+		return err
+	}
 
 	// Get password if not provided
 	if promptPassword {
@@ -209,7 +217,7 @@ func runACLGet(cmd *cobra.Command, args []string) error {
 
 	switch outputFormat {
 	case outputStrimzi:
-		return formatACLStrimzi(cmd.OutOrStdout(), acls)
+		return exportACLStrimzi(ctx, cmd.OutOrStdout(), client, acls, exportOptions)
 	default:
 		formatACLTable(cmd.OutOrStdout(), acls)
 	}

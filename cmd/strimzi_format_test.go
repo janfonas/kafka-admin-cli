@@ -54,7 +54,7 @@ func TestFormatACLStrimzi(t *testing.T) {
 	resources[0].ACLs[3].PermissionType = kmsg.ACLPermissionTypeDeny
 	resources[0].ACLs[3].Host = "192.0.2.1"
 	var out bytes.Buffer
-	if err := formatACLStrimzi(&out, resources); err != nil {
+	if err := formatACLStrimzi(&out, resources, aclExportOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	documents := decodeStrimziDocuments[strimziUserSpec](t, out.Bytes())
@@ -74,8 +74,9 @@ func TestFormatACLStrimzi(t *testing.T) {
 	if len(aliceACLs) != 2 {
 		t.Fatalf("expected two merged ACLs, got %d", len(aliceACLs))
 	}
-	wantResource := strimziACLResource{Type: "topic", Name: "orders", PatternType: "literal"}
-	if aliceACLs[0].Resource != wantResource || !reflect.DeepEqual(aliceACLs[0].Operations, []string{"Read", "Write"}) {
+	resourceName := "orders"
+	wantResource := strimziACLResource{Type: "topic", Name: &resourceName, PatternType: "literal"}
+	if !reflect.DeepEqual(aliceACLs[0].Resource, wantResource) || !reflect.DeepEqual(aliceACLs[0].Operations, []string{"Read", "Write"}) {
 		t.Errorf("unexpected merged ACL: %+v", aliceACLs[0])
 	}
 	if aliceACLs[0].Host != nil || aliceACLs[0].Type != "" {
@@ -120,7 +121,7 @@ func TestFormatACLStrimziRejectsInvalidNamesBeforeWriting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
-			err := formatACLStrimzi(&out, aclResources("User:valid", tt.principal))
+			err := formatACLStrimzi(&out, aclResources("User:valid", tt.principal), aclExportOptions{})
 			if err == nil || !strings.Contains(err.Error(), "cannot export principal") {
 				t.Fatalf("expected invalid principal error, got %v", err)
 			}
@@ -135,7 +136,7 @@ func TestFormatACLStrimziPreservesValidNamesAsStrings(t *testing.T) {
 	for _, name := range []string{"alice", "team.alice-1", "0", "123", "null", "true", "yes", strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61)} {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer
-			if err := formatACLStrimzi(&out, aclResources("User:"+name)); err != nil {
+			if err := formatACLStrimzi(&out, aclResources("User:"+name), aclExportOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			var document struct {
@@ -163,7 +164,7 @@ func TestFormatACLStrimziEscapesResourceAndHost(t *testing.T) {
 			resources[0].ResourceName = value
 			resources[0].ACLs[0].Host = value
 			var out bytes.Buffer
-			if err := formatACLStrimzi(&out, resources); err != nil {
+			if err := formatACLStrimzi(&out, resources, aclExportOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			documents := decodeStrimziDocuments[strimziUserSpec](t, out.Bytes())
@@ -171,8 +172,8 @@ func TestFormatACLStrimziEscapesResourceAndHost(t *testing.T) {
 				t.Fatalf("unexpected injected document or ACL: %+v", documents)
 			}
 			acl := documents[0].Spec.Authorization.ACLs[0]
-			if acl.Resource.Name != value {
-				t.Errorf("resource name changed: got %q, want %q", acl.Resource.Name, value)
+			if acl.Resource.Name == nil || *acl.Resource.Name != value {
+				t.Errorf("resource name did not round-trip: %+v", acl.Resource)
 			}
 			if value == "*" {
 				if acl.Host != nil {
@@ -209,8 +210,15 @@ func TestFormatTopicStrimzi(t *testing.T) {
 	}
 	for i, topic := range topics {
 		document := documents[i]
-		if document.APIVersion != "kafka.strimzi.io/v1beta2" || document.Kind != "KafkaTopic" || document.Metadata.Name != topic.Name {
+		if document.APIVersion != "kafka.strimzi.io/v1beta2" || document.Kind != "KafkaTopic" || !isValidKubernetesName(document.Metadata.Name) {
 			t.Errorf("unexpected topic manifest: %+v", document)
+		}
+		effectiveName := document.Metadata.Name
+		if document.Spec.TopicName != "" {
+			effectiveName = document.Spec.TopicName
+		}
+		if effectiveName != topic.Name {
+			t.Errorf("Kafka topic identity changed: got %q, want %q", effectiveName, topic.Name)
 		}
 		if document.Spec.Partitions != topic.Partitions || document.Spec.Replicas != topic.ReplicationFactor || !reflect.DeepEqual(document.Spec.Config, topic.Config) {
 			t.Errorf("topic details did not round-trip: %+v", document.Spec)
@@ -257,7 +265,7 @@ func TestStrimziOutputErrors(t *testing.T) {
 		name   string
 		format func(io.Writer) error
 	}{
-		{"acl", func(w io.Writer) error { return formatACLStrimzi(w, aclResources("User:alice")) }},
+		{"acl", func(w io.Writer) error { return formatACLStrimzi(w, aclResources("User:alice"), aclExportOptions{}) }},
 		{"topic", func(w io.Writer) error { return formatTopicStrimzi(w, topic) }},
 		{"topics", func(w io.Writer) error { return formatTopicListStrimzi(w, []*kafka.TopicDetails{topic}) }},
 	}
@@ -276,7 +284,7 @@ func TestStrimziOutputErrors(t *testing.T) {
 
 func TestStrimziEmptyOutput(t *testing.T) {
 	var out bytes.Buffer
-	if err := formatACLStrimzi(&out, nil); err != nil {
+	if err := formatACLStrimzi(&out, nil, aclExportOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := formatTopicListStrimzi(&out, nil); err != nil {

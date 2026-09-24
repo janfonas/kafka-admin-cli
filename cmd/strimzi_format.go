@@ -4,9 +4,18 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 
 	"go.yaml.in/yaml/v3"
 )
+
+const maxKubernetesNameLength = 253
+
+var kubernetesNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
+
+func isValidKubernetesName(name string) bool {
+	return len(name) <= maxKubernetesNameLength && kubernetesNamePattern.MatchString(name)
+}
 
 type strimziMetadata struct {
 	Name string `yaml:"name"`

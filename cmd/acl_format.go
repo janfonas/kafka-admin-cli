@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -17,12 +16,10 @@ const (
 
 var validOutputFormats = []string{outputTable, outputStrimzi}
 
-var kubernetesNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
-
 type strimziACLResource struct {
-	Type        string `yaml:"type"`
-	Name        string `yaml:"name"`
-	PatternType string `yaml:"patternType"`
+	Type        string  `yaml:"type"`
+	Name        *string `yaml:"name,omitempty"`
+	PatternType string  `yaml:"patternType,omitempty"`
 }
 
 type strimziACL struct {
@@ -38,7 +35,32 @@ type strimziAuthorization struct {
 }
 
 type strimziUserSpec struct {
-	Authorization strimziAuthorization `yaml:"authorization"`
+	Authentication *strimziUserAuthentication `yaml:"authentication,omitempty"`
+	Authorization  strimziAuthorization       `yaml:"authorization"`
+}
+
+type strimziUserAuthentication struct {
+	Type string `yaml:"type"`
+}
+
+func strimziUserIdentity(principal, tlsAuthentication string) (string, *strimziUserAuthentication, error) {
+	name := strings.TrimPrefix(principal, "User:")
+	var authentication *strimziUserAuthentication
+	if strings.HasPrefix(name, "CN=") {
+		name = strings.TrimPrefix(name, "CN=")
+		if tlsAuthentication == "" {
+			tlsAuthentication = tlsAuthenticationExternal
+		}
+		// Both TLS modes reconstruct CN=<name>; only tls asks the operator to issue credentials.
+		authentication = &strimziUserAuthentication{Type: tlsAuthentication}
+	}
+	if !isValidKubernetesName(name) {
+		return "", nil, fmt.Errorf("cannot export principal %q as a KafkaUser: resource name %q must be a Kubernetes DNS subdomain (at most 253 lowercase letters, digits, '-' or '.', with alphanumeric label boundaries); TLS principals must be CN=<name> without additional DN attributes or escapes", principal, name)
+	}
+	if authentication != nil && authentication.Type == tlsAuthenticationManaged && len(name) > 64 {
+		return "", nil, fmt.Errorf("cannot export principal %q with --tls-authentication tls: Strimzi-managed certificate common names must be at most 64 characters", principal)
+	}
+	return name, authentication, nil
 }
 
 // formatACLTable prints ACL resources in the default human-readable table format.
@@ -59,7 +81,10 @@ func formatACLTable(w io.Writer, resources []kmsg.DescribeACLsResponseResource) 
 
 // formatACLStrimzi renders ACL resources as a Strimzi KafkaUser CR YAML manifest.
 // The output groups ACLs by principal, producing one KafkaUser document per principal.
-func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource) error {
+func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource, options aclExportOptions) error {
+	if err := options.validate(); err != nil {
+		return err
+	}
 	// Group ACLs by principal
 	type aclEntry struct {
 		resource kmsg.DescribeACLsResponseResource
@@ -78,16 +103,30 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 	}
 
 	var manifests []strimziManifest[strimziUserSpec]
+	principalByName := make(map[string]string)
 	for _, principal := range principalOrder {
-		userName := strings.TrimPrefix(principal, "User:")
-		if len(userName) > 253 || !kubernetesNamePattern.MatchString(userName) {
-			return fmt.Errorf("cannot export principal %q as a KafkaUser: name must be a Kubernetes DNS subdomain (at most 253 lowercase letters, digits, '-' or '.', with alphanumeric label boundaries)", principal)
+		userName, authentication, err := strimziUserIdentity(principal, options.tlsAuthentication)
+		if err != nil {
+			return err
+		}
+		if previous, exists := principalByName[userName]; exists {
+			return fmt.Errorf("cannot export principals %q and %q: both map to KafkaUser %q; refusing to overwrite either identity", previous, principal, userName)
+		}
+		principalByName[userName] = principal
+		if authentication == nil && options.discoverSCRAM {
+			authentication, err = discoveredSCRAMAuthentication(userName, options.scramCredentials)
+			if err != nil {
+				return err
+			}
 		}
 		manifest := strimziManifest[strimziUserSpec]{
 			APIVersion: "kafka.strimzi.io/v1beta2",
 			Kind:       "KafkaUser",
 			Metadata:   strimziMetadata{Name: userName},
-			Spec:       strimziUserSpec{Authorization: strimziAuthorization{Type: "simple"}},
+			Spec: strimziUserSpec{
+				Authentication: authentication,
+				Authorization:  strimziAuthorization{Type: "simple"},
+			},
 		}
 
 		// Group by resource + host + permission to merge operations
@@ -128,10 +167,13 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 		for _, m := range merged {
 			acl := strimziACL{
 				Resource: strimziACLResource{
-					Type:        strimziResourceType(m.key.resourceType),
-					Name:        m.key.resourceName,
-					PatternType: strimziPatternType(m.key.patternType),
+					Type: strimziResourceType(m.key.resourceType),
 				},
+			}
+			if m.key.resourceType != kmsg.ACLResourceTypeCluster {
+				name := m.key.resourceName
+				acl.Resource.Name = &name
+				acl.Resource.PatternType = strimziPatternType(m.key.patternType)
 			}
 			for _, op := range m.operations {
 				acl.Operations = append(acl.Operations, strimziOperation(op))
