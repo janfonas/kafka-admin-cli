@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func runACLList(cmd *cobra.Command, args []string) {
+func runACLList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	outputFormat, _ := cmd.Flags().GetString("output")
 
@@ -18,8 +18,7 @@ func runACLList(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
@@ -30,8 +29,7 @@ func runACLList(cmd *cobra.Command, args []string) {
 	}
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
@@ -40,21 +38,20 @@ func runACLList(cmd *cobra.Command, args []string) {
 		// For strimzi output, fetch full ACL details instead of just principals
 		acls, err := client.GetAcl(ctx, "", "", "")
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
-		formatACLStrimzi(cmd.OutOrStdout(), acls)
+		return formatACLStrimzi(cmd.OutOrStdout(), acls)
 	default:
 		// List ACLs (principals only)
 		acls, err := client.ListAcls(ctx)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 		for _, acl := range acls {
 			fmt.Fprintln(cmd.OutOrStdout(), acl)
 		}
 	}
+	return nil
 }
 
 func runACLCreate(cmd *cobra.Command, args []string) {
@@ -175,7 +172,7 @@ func runACLModify(cmd *cobra.Command, args []string) {
 	fmt.Fprintln(cmd.OutOrStdout(), "ACL modified successfully")
 }
 
-func runACLGet(cmd *cobra.Command, args []string) {
+func runACLGet(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get flags
@@ -189,8 +186,7 @@ func runACLGet(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
@@ -201,22 +197,21 @@ func runACLGet(cmd *cobra.Command, args []string) {
 	}
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Get ACL details
 	acls, err := client.GetAcl(ctx, resourceType, resourceName, principal)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	switch outputFormat {
 	case outputStrimzi:
-		formatACLStrimzi(cmd.OutOrStdout(), acls)
+		return formatACLStrimzi(cmd.OutOrStdout(), acls)
 	default:
 		formatACLTable(cmd.OutOrStdout(), acls)
 	}
+	return nil
 }

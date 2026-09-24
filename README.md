@@ -322,6 +322,12 @@ kac get acl --principal User:alice -o strimzi | kubectl apply -f -
 - `strimzi`: Strimzi `KafkaUser` CRD YAML with `spec.authorization.acls`.
   Operations sharing the same resource, host, and permission are merged.
   The default `type: allow` is omitted since it is the Strimzi default.
+  Principal names, after removing the `User:` prefix, must be valid Kubernetes
+  DNS subdomain names: at most 253 lowercase letters, digits, hyphens, or dots,
+  with each dot-separated label starting and ending with a letter or digit.
+  Invalid names cause the export to fail without emitting any manifests; names
+  are never silently renamed. Broker-provided strings in both ACL and topic
+  exports are serialized as YAML data, not interpreted as manifest structure.
 
 ### Consumer Group Commands
 
