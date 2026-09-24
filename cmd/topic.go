@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func runTopicList(cmd *cobra.Command, args []string) {
+func runTopicList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	outputFormat, _ := cmd.Flags().GetString("output")
 
@@ -18,8 +18,7 @@ func runTopicList(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
@@ -30,8 +29,7 @@ func runTopicList(cmd *cobra.Command, args []string) {
 	}
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
@@ -40,8 +38,7 @@ func runTopicList(cmd *cobra.Command, args []string) {
 		// For strimzi output, fetch full details for each topic
 		names, err := client.ListTopics(ctx)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 		var topics []*kafka.TopicDetails
 		for _, name := range names {
@@ -52,17 +49,17 @@ func runTopicList(cmd *cobra.Command, args []string) {
 			}
 			topics = append(topics, details)
 		}
-		formatTopicListStrimzi(cmd.OutOrStdout(), topics)
+		return formatTopicListStrimzi(cmd.OutOrStdout(), topics)
 	default:
 		topics, err := client.ListTopics(ctx)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 		for _, topic := range topics {
 			fmt.Fprintln(cmd.OutOrStdout(), topic)
 		}
 	}
+	return nil
 }
 
 func runTopicCreate(cmd *cobra.Command, args []string) {
@@ -197,10 +194,9 @@ func runTopicModify(cmd *cobra.Command, args []string) {
 	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s modified successfully\n", topic)
 }
 
-func runTopicGet(cmd *cobra.Command, args []string) {
+func runTopicGet(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
-		return
+		return fmt.Errorf("topic name is required")
 	}
 
 	ctx := context.Background()
@@ -212,8 +208,7 @@ func runTopicGet(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
@@ -224,22 +219,21 @@ func runTopicGet(cmd *cobra.Command, args []string) {
 	}
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure, clientOpts...)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Get topic details
 	details, err := client.GetTopic(ctx, topic)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	switch outputFormat {
 	case outputStrimzi:
-		formatTopicStrimzi(cmd.OutOrStdout(), details)
+		return formatTopicStrimzi(cmd.OutOrStdout(), details)
 	default:
 		formatTopicTable(cmd.OutOrStdout(), details)
 	}
+	return nil
 }

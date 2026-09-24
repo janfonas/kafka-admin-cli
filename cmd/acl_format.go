@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -15,6 +16,30 @@ const (
 )
 
 var validOutputFormats = []string{outputTable, outputStrimzi}
+
+var kubernetesNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
+
+type strimziACLResource struct {
+	Type        string `yaml:"type"`
+	Name        string `yaml:"name"`
+	PatternType string `yaml:"patternType"`
+}
+
+type strimziACL struct {
+	Resource   strimziACLResource `yaml:"resource"`
+	Operations []string           `yaml:"operations"`
+	Host       *string            `yaml:"host,omitempty"`
+	Type       string             `yaml:"type,omitempty"`
+}
+
+type strimziAuthorization struct {
+	Type string       `yaml:"type"`
+	ACLs []strimziACL `yaml:"acls"`
+}
+
+type strimziUserSpec struct {
+	Authorization strimziAuthorization `yaml:"authorization"`
+}
 
 // formatACLTable prints ACL resources in the default human-readable table format.
 func formatACLTable(w io.Writer, resources []kmsg.DescribeACLsResponseResource) {
@@ -34,7 +59,7 @@ func formatACLTable(w io.Writer, resources []kmsg.DescribeACLsResponseResource) 
 
 // formatACLStrimzi renders ACL resources as a Strimzi KafkaUser CR YAML manifest.
 // The output groups ACLs by principal, producing one KafkaUser document per principal.
-func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource) {
+func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource) error {
 	// Group ACLs by principal
 	type aclEntry struct {
 		resource kmsg.DescribeACLsResponseResource
@@ -52,24 +77,18 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 		}
 	}
 
-	for i, principal := range principalOrder {
-		if i > 0 {
-			fmt.Fprintln(w, "---")
+	var manifests []strimziManifest[strimziUserSpec]
+	for _, principal := range principalOrder {
+		userName := strings.TrimPrefix(principal, "User:")
+		if len(userName) > 253 || !kubernetesNamePattern.MatchString(userName) {
+			return fmt.Errorf("cannot export principal %q as a KafkaUser: name must be a Kubernetes DNS subdomain (at most 253 lowercase letters, digits, '-' or '.', with alphanumeric label boundaries)", principal)
 		}
-
-		userName := principal
-		if strings.HasPrefix(principal, "User:") {
-			userName = strings.TrimPrefix(principal, "User:")
+		manifest := strimziManifest[strimziUserSpec]{
+			APIVersion: "kafka.strimzi.io/v1beta2",
+			Kind:       "KafkaUser",
+			Metadata:   strimziMetadata{Name: userName},
+			Spec:       strimziUserSpec{Authorization: strimziAuthorization{Type: "simple"}},
 		}
-
-		fmt.Fprintln(w, "apiVersion: kafka.strimzi.io/v1beta2")
-		fmt.Fprintln(w, "kind: KafkaUser")
-		fmt.Fprintln(w, "metadata:")
-		fmt.Fprintf(w, "  name: %s\n", userName)
-		fmt.Fprintln(w, "spec:")
-		fmt.Fprintln(w, "  authorization:")
-		fmt.Fprintln(w, "    type: simple")
-		fmt.Fprintln(w, "    acls:")
 
 		// Group by resource + host + permission to merge operations
 		type aclKey struct {
@@ -107,22 +126,28 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 		}
 
 		for _, m := range merged {
-			fmt.Fprintln(w, "      - resource:")
-			fmt.Fprintf(w, "          type: %s\n", strimziResourceType(m.key.resourceType))
-			fmt.Fprintf(w, "          name: %s\n", yamlQuoteIfNeeded(m.key.resourceName))
-			fmt.Fprintf(w, "          patternType: %s\n", strimziPatternType(m.key.patternType))
-			fmt.Fprintln(w, "        operations:")
+			acl := strimziACL{
+				Resource: strimziACLResource{
+					Type:        strimziResourceType(m.key.resourceType),
+					Name:        m.key.resourceName,
+					PatternType: strimziPatternType(m.key.patternType),
+				},
+			}
 			for _, op := range m.operations {
-				fmt.Fprintf(w, "          - %s\n", strimziOperation(op))
+				acl.Operations = append(acl.Operations, strimziOperation(op))
 			}
 			if m.key.host != "*" {
-				fmt.Fprintf(w, "        host: %s\n", yamlQuoteIfNeeded(m.key.host))
+				host := m.key.host
+				acl.Host = &host
 			}
 			if m.key.permissionType != kmsg.ACLPermissionTypeAllow {
-				fmt.Fprintf(w, "        type: %s\n", strimziPermission(m.key.permissionType))
+				acl.Type = strimziPermission(m.key.permissionType)
 			}
+			manifest.Spec.Authorization.ACLs = append(manifest.Spec.Authorization.ACLs, acl)
 		}
+		manifests = append(manifests, manifest)
 	}
+	return writeStrimziManifests(w, manifests)
 }
 
 // strimziResourceType maps Kafka ACLResourceType to Strimzi resource type string.
@@ -195,12 +220,4 @@ func strimziPermission(p kmsg.ACLPermissionType) string {
 	default:
 		return strings.ToLower(p.String())
 	}
-}
-
-// yamlQuoteIfNeeded wraps a value in quotes if it contains special YAML characters.
-func yamlQuoteIfNeeded(s string) string {
-	if s == "*" || s == "" || strings.ContainsAny(s, ":{}[]&!|>'\"%@`") {
-		return fmt.Sprintf("%q", s)
-	}
-	return s
 }

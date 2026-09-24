@@ -29,7 +29,7 @@ func newGetTopicsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "topics",
 		Short: "List all Kafka topics",
-		Run:   runTopicList,
+		RunE:  runTopicList,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
@@ -42,7 +42,7 @@ func newGetTopicCmd() *cobra.Command {
 		Use:               "topic [name]",
 		Short:             "Get details of a specific topic",
 		Args:              cobra.ExactArgs(1),
-		Run:               runTopicGet,
+		RunE:              runTopicGet,
 		ValidArgsFunction: completeTopicNames,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
@@ -55,7 +55,7 @@ func newGetACLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acls",
 		Short: "List all Kafka ACLs",
-		Run:   runACLList,
+		RunE:  runACLList,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
@@ -67,7 +67,7 @@ func newGetACLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acl",
 		Short: "Get ACL details",
-		Run:   runACLGet,
+		RunE:  runACLGet,
 	}
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")
