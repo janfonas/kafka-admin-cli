@@ -106,7 +106,7 @@ func TestPartitionOffsetCalculation(t *testing.T) {
 			var lag int64
 			var isEmpty bool
 			var endDisplay string
-			
+
 			if tt.end == -1 {
 				if tt.current <= 0 {
 					// Truly empty partition: no messages ever produced
