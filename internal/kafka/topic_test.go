@@ -2,82 +2,43 @@ package kafka
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 func TestTopicErrorHandling(t *testing.T) {
 	tests := []struct {
-		name      string
-		errorCode int16
-		wantError bool
-		errorMsg  string
+		name string
+		code int16
+		want error
 	}{
-		{
-			name:      "success",
-			errorCode: 0,
-			wantError: false,
-		},
-		{
-			name:      "metadata update",
-			errorCode: 7,
-			wantError: false,
-		},
-		{
-			name:      "topic exists",
-			errorCode: 36,
-			wantError: true,
-			errorMsg:  "topic already exists: test-topic",
-		},
-		{
-			name:      "invalid replication",
-			errorCode: 37,
-			wantError: true,
-			errorMsg:  "invalid replication factor: 1",
-		},
-		{
-			name:      "invalid partitions",
-			errorCode: 39,
-			wantError: true,
-			errorMsg:  "invalid number of partitions: 1",
-		},
-		{
-			name:      "invalid name",
-			errorCode: 41,
-			wantError: true,
-			errorMsg:  "topic name is invalid",
-		},
-		{
-			name:      "unknown error",
-			errorCode: 99,
-			wantError: true,
-			errorMsg:  "failed to create topic: error code 99",
-		},
+		{name: "success"},
+		{name: "request timed out is a failure", code: kerr.RequestTimedOut.Code, want: kerr.RequestTimedOut},
+		{name: "topic exists", code: kerr.TopicAlreadyExists.Code, want: kerr.TopicAlreadyExists},
+		{name: "invalid partitions", code: kerr.InvalidPartitions.Code, want: kerr.InvalidPartitions},
+		{name: "invalid replication", code: kerr.InvalidReplicationFactor.Code, want: kerr.InvalidReplicationFactor},
+		{name: "invalid name", code: kerr.InvalidTopicException.Code, want: kerr.InvalidTopicException},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp := &kmsg.CreateTopicsResponse{
-				Topics: []kmsg.CreateTopicsResponseTopic{
-					{
-						ErrorCode: tt.errorCode,
-					},
-				},
+				Topics: []kmsg.CreateTopicsResponseTopic{{ErrorCode: tt.code}},
 			}
 
 			err := handleTopicCreateError(resp, "test-topic", 1, 1)
-			if tt.wantError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				if err.Error() != tt.errorMsg {
-					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
-				}
-			} else {
+			if tt.want == nil {
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
+				return
+			}
+			if !errors.Is(err, tt.want) || !strings.HasPrefix(err.Error(), `failed to create topic "test-topic" with 1 partitions and replication factor 1`) {
+				t.Errorf("expected %v with topic context, got %v", tt.want, err)
 			}
 		})
 	}
@@ -109,7 +70,7 @@ func TestModifyTopic(t *testing.T) {
 			},
 			errorCode: 3,
 			wantError: true,
-			errorMsg:  "topic does not exist: nonexistent-topic",
+			errorMsg:  `failed to modify topic "nonexistent-topic" config (error code 3)`,
 		},
 		{
 			name:  "invalid topic name",
@@ -117,9 +78,9 @@ func TestModifyTopic(t *testing.T) {
 			config: map[string]string{
 				"retention.ms": "86400000",
 			},
-			errorCode: 41,
+			errorCode: 17,
 			wantError: true,
-			errorMsg:  "topic name is invalid",
+			errorMsg:  `failed to modify topic "" config (error code 17)`,
 		},
 		{
 			name:  "unknown error",
@@ -129,7 +90,7 @@ func TestModifyTopic(t *testing.T) {
 			},
 			errorCode: 99,
 			wantError: true,
-			errorMsg:  "failed to modify topic config: error code 99",
+			errorMsg:  `failed to modify topic "test-topic" config (error code 99)`,
 		},
 	}
 
@@ -148,10 +109,10 @@ func TestModifyTopic(t *testing.T) {
 			err := client.ModifyTopic(context.Background(), tt.topic, tt.config)
 			if tt.wantError {
 				if err == nil {
-					t.Error("expected error, got nil")
+					t.Fatal("expected error, got nil")
 				}
-				if err.Error() != tt.errorMsg {
-					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
+				if !strings.HasPrefix(err.Error(), tt.errorMsg) || !errors.Is(err, kerr.ErrorForCode(tt.errorCode)) {
+					t.Errorf("expected error prefix %q wrapping code %d, got %q", tt.errorMsg, tt.errorCode, err.Error())
 				}
 			} else {
 				if err != nil {

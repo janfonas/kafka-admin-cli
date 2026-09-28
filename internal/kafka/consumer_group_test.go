@@ -2,61 +2,32 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/twmb/franz-go/pkg/kerr"
 )
 
-func TestConsumerGroupErrorHandling(t *testing.T) {
-	tests := []struct {
-		name      string
-		errorCode int16
-		wantError bool
-		errorMsg  string
+func TestRequestErrorWrapsKafkaErrors(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		code int16
+		want error
 	}{
-		{
-			name:      "success",
-			errorCode: 0,
-			wantError: false,
-		},
-		{
-			name:      "metadata update",
-			errorCode: 7,
-			wantError: false,
-		},
-		{
-			name:      "group not found",
-			errorCode: 15,
-			wantError: true,
-			errorMsg:  "consumer group not found",
-		},
-		{
-			name:      "invalid group id",
-			errorCode: 24,
-			wantError: true,
-			errorMsg:  "invalid consumer group id",
-		},
-		{
-			name:      "unknown error",
-			errorCode: 99,
-			wantError: true,
-			errorMsg:  "failed to process consumer group request: error code 99",
-		},
-	}
-
-	for _, tt := range tests {
+		{"request timed out is a failure", kerr.RequestTimedOut.Code, kerr.RequestTimedOut},
+		{"coordinator not available", kerr.CoordinatorNotAvailable.Code, kerr.CoordinatorNotAvailable},
+		{"group not found", kerr.GroupIDNotFound.Code, kerr.GroupIDNotFound},
+		{"unknown code", 32000, kerr.UnknownServerError},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := handleConsumerGroupError(tt.errorCode)
-			if tt.wantError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				if err.Error() != tt.errorMsg {
-					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
+			err := requestError(`describe consumer group "g"`, tt.code, nil)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("expected %v, got %v", tt.want, err)
+			}
+			if want := fmt.Sprintf(`failed to describe consumer group "g" (error code %d)`, tt.code); !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("expected prefix %q, got %q", want, err)
 			}
 		})
 	}
@@ -182,43 +153,13 @@ func TestDeleteConsumerGroup(t *testing.T) {
 	tests := []struct {
 		name      string
 		errorCode int16
-		wantError bool
-		errorMsg  string
+		want      error
 	}{
-		{
-			name:      "success",
-			errorCode: 0,
-			wantError: false,
-		},
-		{
-			name:      "metadata update",
-			errorCode: 7,
-			wantError: false,
-		},
-		{
-			name:      "group not found",
-			errorCode: 15,
-			wantError: true,
-			errorMsg:  "consumer group not found: test-group",
-		},
-		{
-			name:      "invalid group id",
-			errorCode: 24,
-			wantError: true,
-			errorMsg:  "invalid consumer group id: test-group",
-		},
-		{
-			name:      "group not empty",
-			errorCode: 25,
-			wantError: true,
-			errorMsg:  "consumer group is not empty: test-group",
-		},
-		{
-			name:      "unknown error",
-			errorCode: 99,
-			wantError: true,
-			errorMsg:  "failed to delete consumer group: error code 99",
-		},
+		{name: "success"},
+		{name: "request timed out is a failure", errorCode: kerr.RequestTimedOut.Code, want: kerr.RequestTimedOut},
+		{name: "group not found", errorCode: kerr.GroupIDNotFound.Code, want: kerr.GroupIDNotFound},
+		{name: "invalid group id", errorCode: kerr.InvalidGroupID.Code, want: kerr.InvalidGroupID},
+		{name: "group not empty", errorCode: kerr.NonEmptyGroup.Code, want: kerr.NonEmptyGroup},
 	}
 
 	for _, tt := range tests {
@@ -227,17 +168,14 @@ func TestDeleteConsumerGroup(t *testing.T) {
 			client := &Client{client: mockClient}
 			err := client.DeleteConsumerGroup(context.Background(), "test-group")
 
-			if tt.wantError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				if err.Error() != tt.errorMsg {
-					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
-				}
-			} else {
+			if tt.want == nil {
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
+				return
+			}
+			if !errors.Is(err, tt.want) || !strings.HasPrefix(err.Error(), `failed to delete consumer group "test-group"`) {
+				t.Errorf("expected %v for test-group, got %v", tt.want, err)
 			}
 		})
 	}
