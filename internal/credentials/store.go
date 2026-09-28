@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	serviceName        = "kafka-admin-cli"
-	activeProfileKey   = "_active_profile"
-	configDirName      = ".kac"
-	activeProfileFile  = "active_profile"
+	serviceName       = "kafka-admin-cli"
+	activeProfileKey  = "_active_profile"
+	configDirName     = ".kac"
+	activeProfileFile = "active_profile"
 )
 
 type Profile struct {
@@ -227,7 +227,7 @@ func getConfigDir() (string, error) {
 // trackProfile adds a profile name to the tracking file
 func trackProfile(profileName string) error {
 	profiles, _ := getTrackedProfiles()
-	
+
 	// Check if already tracked
 	for _, p := range profiles {
 		if p == profileName {
