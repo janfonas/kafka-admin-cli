@@ -321,3 +321,10 @@ func completeOutputFormats() func(cmd *cobra.Command, args []string, toComplete 
 		return validOutputFormats, cobra.ShellCompDirectiveNoFileComp
 	}
 }
+
+// completeACLOutputFormats returns a completion function for the ACL --output flag.
+func completeACLOutputFormats() func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return aclOutputFormats, cobra.ShellCompDirectiveNoFileComp
+	}
+}

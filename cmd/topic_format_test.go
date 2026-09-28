@@ -71,7 +71,7 @@ func TestFormatTopicStrimziPreservesMappedNames(t *testing.T) {
 		{Name: "foo", Partitions: 3, ReplicationFactor: 1},
 	}
 	var out bytes.Buffer
-	if err := formatTopicListStrimzi(&out, topics); err != nil {
+	if err := formatTopicListStrimzi(&out, topics, strimziAPIVersionV1Beta2); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Count(out.String(), "\n---\n"); got != len(topics)-1 {
@@ -106,7 +106,7 @@ func TestFormatTopicStrimziRejectsNameCollisions(t *testing.T) {
 		t.Run(order[0], func(t *testing.T) {
 			topics := []*kafka.TopicDetails{{Name: order[0]}, {Name: order[1]}}
 			var out bytes.Buffer
-			err := formatTopicListStrimzi(&out, topics)
+			err := formatTopicListStrimzi(&out, topics, strimziAPIVersionV1Beta2)
 			if err == nil || !strings.Contains(err.Error(), "both map to KafkaTopic") {
 				t.Fatalf("expected collision error, got %v", err)
 			}
@@ -119,7 +119,7 @@ func TestFormatTopicStrimziRejectsNameCollisions(t *testing.T) {
 
 func TestFormatTopicStrimziRejectsEmptyName(t *testing.T) {
 	var out bytes.Buffer
-	err := formatTopicListStrimzi(&out, []*kafka.TopicDetails{{Name: "valid"}, {Name: ""}})
+	err := formatTopicListStrimzi(&out, []*kafka.TopicDetails{{Name: "valid"}, {Name: ""}}, strimziAPIVersionV1Beta2)
 	if err == nil || !strings.Contains(err.Error(), "empty name") {
 		t.Fatalf("expected empty name error, got %v", err)
 	}

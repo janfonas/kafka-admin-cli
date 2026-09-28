@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/janfonas/kafka-admin-cli/internal/kafka"
+	"github.com/spf13/cobra"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"go.yaml.in/yaml/v3"
 )
@@ -201,7 +202,7 @@ func TestFormatTopicStrimzi(t *testing.T) {
 		{Name: "orders", Partitions: 1, ReplicationFactor: 1},
 	}
 	var out bytes.Buffer
-	if err := formatTopicListStrimzi(&out, topics); err != nil {
+	if err := formatTopicListStrimzi(&out, topics, strimziAPIVersionV1Beta2); err != nil {
 		t.Fatal(err)
 	}
 	documents := decodeStrimziDocuments[strimziTopicSpec](t, out.Bytes())
@@ -226,14 +227,14 @@ func TestFormatTopicStrimzi(t *testing.T) {
 	}
 	firstOutput := out.String()
 	out.Reset()
-	if err := formatTopicListStrimzi(&out, topics); err != nil {
+	if err := formatTopicListStrimzi(&out, topics, strimziAPIVersionV1Beta2); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != firstOutput {
 		t.Error("topic output must be deterministic")
 	}
 	out.Reset()
-	if err := formatTopicStrimzi(&out, topics[0]); err != nil {
+	if err := formatTopicStrimzi(&out, topics[0], ""); err != nil {
 		t.Fatal(err)
 	}
 	var document struct {
@@ -266,8 +267,10 @@ func TestStrimziOutputErrors(t *testing.T) {
 		format func(io.Writer) error
 	}{
 		{"acl", func(w io.Writer) error { return formatACLStrimzi(w, aclResources("User:alice"), aclExportOptions{}) }},
-		{"topic", func(w io.Writer) error { return formatTopicStrimzi(w, topic) }},
-		{"topics", func(w io.Writer) error { return formatTopicListStrimzi(w, []*kafka.TopicDetails{topic}) }},
+		{"topic", func(w io.Writer) error { return formatTopicStrimzi(w, topic, strimziAPIVersionV1Beta2) }},
+		{"topics", func(w io.Writer) error {
+			return formatTopicListStrimzi(w, []*kafka.TopicDetails{topic}, strimziAPIVersionV1Beta2)
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -287,11 +290,66 @@ func TestStrimziEmptyOutput(t *testing.T) {
 	if err := formatACLStrimzi(&out, nil, aclExportOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := formatTopicListStrimzi(&out, nil); err != nil {
+	if err := formatTopicListStrimzi(&out, nil, strimziAPIVersionV1Beta2); err != nil {
 		t.Fatal(err)
 	}
 	if out.Len() != 0 {
 		t.Fatalf("expected no documents, got %s", &out)
+	}
+}
+
+func TestStrimziAPIVersionSelection(t *testing.T) {
+	topic := &kafka.TopicDetails{Name: "orders", Partitions: 1, ReplicationFactor: 1}
+	for _, apiVersion := range []string{"", strimziAPIVersionV1Beta2, strimziAPIVersionV1} {
+		t.Run(apiVersion, func(t *testing.T) {
+			want := strimziAPIVersionOrDefault(apiVersion)
+			var users, topics bytes.Buffer
+			if err := formatACLStrimzi(&users, aclResources("User:alice"), aclExportOptions{apiVersion: apiVersion}); err != nil {
+				t.Fatal(err)
+			}
+			if err := formatTopicStrimzi(&topics, topic, apiVersion); err != nil {
+				t.Fatal(err)
+			}
+			if got := decodeStrimziDocuments[strimziUserSpec](t, users.Bytes())[0].APIVersion; got != want {
+				t.Errorf("KafkaUser apiVersion = %q, want %q", got, want)
+			}
+			if got := decodeStrimziDocuments[strimziTopicSpec](t, topics.Bytes())[0].APIVersion; got != want {
+				t.Errorf("KafkaTopic apiVersion = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestReadStrimziAPIVersion(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		output  string
+		args    []string
+		want    string
+		wantErr string
+	}{
+		{name: "default", output: outputStrimzi, want: strimziAPIVersionV1Beta2},
+		{name: "v1", output: outputStrimzi, args: []string{"--strimzi-api-version", strimziAPIVersionV1}, want: strimziAPIVersionV1},
+		{name: "unsupported", output: outputStrimzi, args: []string{"--strimzi-api-version", "kafka.strimzi.io/v1alpha1"}, wantErr: "invalid --strimzi-api-version"},
+		{name: "requires strimzi output", output: outputJSON, args: []string{"--strimzi-api-version", strimziAPIVersionV1}, wantErr: "requires --output strimzi"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			addStrimziAPIVersionFlag(cmd)
+			if err := cmd.ParseFlags(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readStrimziAPIVersion(cmd, tt.output)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected %q, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Fatalf("got %q, %v", got, err)
+			}
+		})
 	}
 }
 

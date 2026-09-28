@@ -1,0 +1,81 @@
+{
+  "kind": "KafkaACLExport",
+  "schemaVersion": 1,
+  "clusterId": "Hm2pQ4rXS7yN0vB8kLd3aw",
+  "capturedAt": "2026-09-28T10:00:00Z",
+  "filter": {},
+  "bindings": [
+    {
+      "principal": "User:*",
+      "host": "*",
+      "resourceType": "TOPIC",
+      "resourceName": "public-",
+      "patternType": "PREFIXED",
+      "operation": "READ",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:CN=orders-app",
+      "host": "*",
+      "resourceType": "GROUP",
+      "resourceName": "orders-",
+      "patternType": "PREFIXED",
+      "operation": "READ",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:CN=orders-app",
+      "host": "*",
+      "resourceType": "TOPIC",
+      "resourceName": "orders",
+      "patternType": "LITERAL",
+      "operation": "DESCRIBE",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:CN=orders-app",
+      "host": "*",
+      "resourceType": "TOPIC",
+      "resourceName": "orders",
+      "patternType": "LITERAL",
+      "operation": "READ",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:admin",
+      "host": "*",
+      "resourceType": "CLUSTER",
+      "resourceName": "kafka-cluster",
+      "patternType": "LITERAL",
+      "operation": "ALTER",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:alice",
+      "host": "*",
+      "resourceType": "TOPIC",
+      "resourceName": "payments",
+      "patternType": "LITERAL",
+      "operation": "DELETE",
+      "permission": "DENY"
+    },
+    {
+      "principal": "User:alice",
+      "host": "10.0.0.5",
+      "resourceType": "TOPIC",
+      "resourceName": "payments",
+      "patternType": "LITERAL",
+      "operation": "WRITE",
+      "permission": "ALLOW"
+    },
+    {
+      "principal": "User:alice",
+      "host": "*",
+      "resourceType": "TRANSACTIONAL_ID",
+      "resourceName": "payments-tx",
+      "patternType": "LITERAL",
+      "operation": "WRITE",
+      "permission": "ALLOW"
+    }
+  ]
+}

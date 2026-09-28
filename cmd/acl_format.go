@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -12,9 +13,19 @@ import (
 const (
 	outputTable   = "table"
 	outputStrimzi = "strimzi"
+	outputJSON    = "json"
 )
 
 var validOutputFormats = []string{outputTable, outputStrimzi}
+
+var aclOutputFormats = []string{outputTable, outputStrimzi, outputJSON}
+
+func validateACLOutputFormat(format string) error {
+	if !slices.Contains(aclOutputFormats, format) {
+		return fmt.Errorf("invalid --output %q: use %s", format, strings.Join(aclOutputFormats, ", "))
+	}
+	return nil
+}
 
 type strimziACLResource struct {
 	Type        string  `yaml:"type"`
@@ -120,7 +131,7 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 			}
 		}
 		manifest := strimziManifest[strimziUserSpec]{
-			APIVersion: "kafka.strimzi.io/v1beta2",
+			APIVersion: strimziAPIVersionOrDefault(options.apiVersion),
 			Kind:       "KafkaUser",
 			Metadata:   strimziMetadata{Name: userName},
 			Spec: strimziUserSpec{
@@ -165,25 +176,40 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 		}
 
 		for _, m := range merged {
+			resourceType, err := strimziResourceType(m.key.resourceType)
+			if err != nil {
+				return fmt.Errorf("cannot export ACLs for principal %q: %w", principal, err)
+			}
 			acl := strimziACL{
 				Resource: strimziACLResource{
-					Type: strimziResourceType(m.key.resourceType),
+					Type: resourceType,
 				},
 			}
 			if m.key.resourceType != kmsg.ACLResourceTypeCluster {
 				name := m.key.resourceName
 				acl.Resource.Name = &name
-				acl.Resource.PatternType = strimziPatternType(m.key.patternType)
+				acl.Resource.PatternType, err = strimziPatternType(m.key.patternType)
+				if err != nil {
+					return fmt.Errorf("cannot export ACLs for principal %q: %w", principal, err)
+				}
 			}
 			for _, op := range m.operations {
-				acl.Operations = append(acl.Operations, strimziOperation(op))
+				operation, err := strimziOperation(op)
+				if err != nil {
+					return fmt.Errorf("cannot export ACLs for principal %q: %w", principal, err)
+				}
+				acl.Operations = append(acl.Operations, operation)
 			}
 			if m.key.host != "*" {
 				host := m.key.host
 				acl.Host = &host
 			}
-			if m.key.permissionType != kmsg.ACLPermissionTypeAllow {
-				acl.Type = strimziPermission(m.key.permissionType)
+			switch m.key.permissionType {
+			case kmsg.ACLPermissionTypeAllow:
+			case kmsg.ACLPermissionTypeDeny:
+				acl.Type = "deny"
+			default:
+				return fmt.Errorf("cannot export ACLs for principal %q: permission %v is not supported by Strimzi KafkaUser ACL rules", principal, m.key.permissionType)
 			}
 			manifest.Spec.Authorization.ACLs = append(manifest.Spec.Authorization.ACLs, acl)
 		}
@@ -192,74 +218,60 @@ func formatACLStrimzi(w io.Writer, resources []kmsg.DescribeACLsResponseResource
 	return writeStrimziManifests(w, manifests)
 }
 
-// strimziResourceType maps Kafka ACLResourceType to Strimzi resource type string.
-func strimziResourceType(t kmsg.ACLResourceType) string {
+// strimziResourceType maps Kafka ACLResourceType to the Strimzi resource types KafkaUser supports.
+func strimziResourceType(t kmsg.ACLResourceType) (string, error) {
 	switch t {
 	case kmsg.ACLResourceTypeTopic:
-		return "topic"
+		return "topic", nil
 	case kmsg.ACLResourceTypeGroup:
-		return "group"
+		return "group", nil
 	case kmsg.ACLResourceTypeCluster:
-		return "cluster"
+		return "cluster", nil
 	case kmsg.ACLResourceTypeTransactionalId:
-		return "transactionalId"
-	case kmsg.ACLResourceTypeDelegationToken:
-		return "delegationToken"
+		return "transactionalId", nil
 	default:
-		return strings.ToLower(t.String())
+		return "", fmt.Errorf("resource type %v is not supported by Strimzi KafkaUser ACL rules", t)
 	}
 }
 
 // strimziPatternType maps Kafka ACLResourcePatternType to Strimzi patternType string.
-func strimziPatternType(t kmsg.ACLResourcePatternType) string {
+func strimziPatternType(t kmsg.ACLResourcePatternType) (string, error) {
 	switch t {
 	case kmsg.ACLResourcePatternTypeLiteral:
-		return "literal"
+		return "literal", nil
 	case kmsg.ACLResourcePatternTypePrefixed:
-		return "prefix"
+		return "prefix", nil
 	default:
-		return "literal"
+		return "", fmt.Errorf("pattern type %v is not supported by Strimzi KafkaUser ACL rules", t)
 	}
 }
 
 // strimziOperation maps Kafka ACLOperation to Strimzi operation string.
-func strimziOperation(op kmsg.ACLOperation) string {
+func strimziOperation(op kmsg.ACLOperation) (string, error) {
 	switch op {
 	case kmsg.ACLOperationAll:
-		return "All"
+		return "All", nil
 	case kmsg.ACLOperationRead:
-		return "Read"
+		return "Read", nil
 	case kmsg.ACLOperationWrite:
-		return "Write"
+		return "Write", nil
 	case kmsg.ACLOperationCreate:
-		return "Create"
+		return "Create", nil
 	case kmsg.ACLOperationDelete:
-		return "Delete"
+		return "Delete", nil
 	case kmsg.ACLOperationAlter:
-		return "Alter"
+		return "Alter", nil
 	case kmsg.ACLOperationDescribe:
-		return "Describe"
+		return "Describe", nil
 	case kmsg.ACLOperationClusterAction:
-		return "ClusterAction"
+		return "ClusterAction", nil
 	case kmsg.ACLOperationDescribeConfigs:
-		return "DescribeConfigs"
+		return "DescribeConfigs", nil
 	case kmsg.ACLOperationAlterConfigs:
-		return "AlterConfigs"
+		return "AlterConfigs", nil
 	case kmsg.ACLOperationIdempotentWrite:
-		return "IdempotentWrite"
+		return "IdempotentWrite", nil
 	default:
-		return op.String()
-	}
-}
-
-// strimziPermission maps Kafka ACLPermissionType to Strimzi acl type string.
-func strimziPermission(p kmsg.ACLPermissionType) string {
-	switch p {
-	case kmsg.ACLPermissionTypeAllow:
-		return "allow"
-	case kmsg.ACLPermissionTypeDeny:
-		return "deny"
-	default:
-		return strings.ToLower(p.String())
+		return "", fmt.Errorf("operation %v is not supported by Strimzi KafkaUser ACL rules", op)
 	}
 }
