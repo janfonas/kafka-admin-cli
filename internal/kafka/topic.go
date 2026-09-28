@@ -53,18 +53,7 @@ func (c *Client) DeleteTopic(ctx context.Context, topic string) error {
 	}
 	// Response field is always resp.Topics regardless of request version
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
-		switch resp.Topics[0].ErrorCode {
-		case 3:
-			return fmt.Errorf("topic does not exist: %s", topic)
-		case 7:
-			// Error code 7 during deletion usually means the topic is already being deleted
-			// or the operation was successful but the metadata is still being updated
-			return nil
-		case 41:
-			return fmt.Errorf("topic name is invalid")
-		default:
-			return fmt.Errorf("failed to delete topic: error code %v", resp.Topics[0].ErrorCode)
-		}
+		return requestError(fmt.Sprintf("delete topic %q", topic), resp.Topics[0].ErrorCode, resp.Topics[0].ErrorMessage)
 	}
 	return nil
 }
@@ -94,14 +83,7 @@ func (c *Client) ModifyTopic(ctx context.Context, topic string, config map[strin
 	}
 
 	if len(resp.Resources) > 0 && resp.Resources[0].ErrorCode != 0 {
-		switch resp.Resources[0].ErrorCode {
-		case 3:
-			return fmt.Errorf("topic does not exist: %s", topic)
-		case 41:
-			return fmt.Errorf("topic name is invalid")
-		default:
-			return fmt.Errorf("failed to modify topic config: error code %v", resp.Resources[0].ErrorCode)
-		}
+		return requestError(fmt.Sprintf("modify topic %q config", topic), resp.Resources[0].ErrorCode, resp.Resources[0].ErrorMessage)
 	}
 
 	return nil
@@ -125,12 +107,7 @@ func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, err
 	}
 
 	if resp.Topics[0].ErrorCode != 0 {
-		switch resp.Topics[0].ErrorCode {
-		case 3:
-			return nil, fmt.Errorf("topic does not exist: %s", topic)
-		default:
-			return nil, fmt.Errorf("failed to get topic metadata: error code %v", resp.Topics[0].ErrorCode)
-		}
+		return nil, requestError(fmt.Sprintf("get topic %q metadata", topic), resp.Topics[0].ErrorCode, nil)
 	}
 
 	// Get topic configuration
@@ -147,6 +124,9 @@ func (c *Client) GetTopic(ctx context.Context, topic string) (*TopicDetails, err
 
 	config := make(map[string]string)
 	if len(configResp.Resources) > 0 {
+		if code := configResp.Resources[0].ErrorCode; code != 0 {
+			return nil, requestError(fmt.Sprintf("get topic %q config", topic), code, configResp.Resources[0].ErrorMessage)
+		}
 		for _, entry := range configResp.Resources[0].Configs {
 			if !entry.IsDefault {
 				if entry.Value != nil {
@@ -186,20 +166,8 @@ func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
 // and returns appropriate error messages.
 func handleTopicCreateError(resp *kmsg.CreateTopicsResponse, topic string, partitions, replicationFactor int) error {
 	if len(resp.Topics) > 0 && resp.Topics[0].ErrorCode != 0 {
-		switch resp.Topics[0].ErrorCode {
-		case 7:
-			return nil
-		case 36:
-			return fmt.Errorf("topic already exists: %s", topic)
-		case 37:
-			return fmt.Errorf("invalid replication factor: %d", replicationFactor)
-		case 39:
-			return fmt.Errorf("invalid number of partitions: %d", partitions)
-		case 41:
-			return fmt.Errorf("topic name is invalid")
-		default:
-			return fmt.Errorf("failed to create topic: error code %v", resp.Topics[0].ErrorCode)
-		}
+		operation := fmt.Sprintf("create topic %q with %d partitions and replication factor %d", topic, partitions, replicationFactor)
+		return requestError(operation, resp.Topics[0].ErrorCode, resp.Topics[0].ErrorMessage)
 	}
 	return nil
 }

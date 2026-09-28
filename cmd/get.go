@@ -32,6 +32,7 @@ func newGetTopicsCmd() *cobra.Command {
 		RunE:  runTopicList,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	addStrimziAPIVersionFlag(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
@@ -46,6 +47,7 @@ func newGetTopicCmd() *cobra.Command {
 		ValidArgsFunction: completeTopicNames,
 	}
 	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	addStrimziAPIVersionFlag(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
 	return cmd
 }
@@ -57,9 +59,9 @@ func newGetACLsCmd() *cobra.Command {
 		Short: "List all Kafka ACLs",
 		RunE:  runACLList,
 	}
-	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi, json)")
 	addACLExportFlags(cmd)
-	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
+	_ = cmd.RegisterFlagCompletionFunc("output", completeACLOutputFormats())
 	return cmd
 }
 
@@ -73,11 +75,11 @@ func newGetACLCmd() *cobra.Command {
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")
 	cmd.Flags().String("principal", "", "Principal (e.g., User:alice)")
-	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi)")
+	cmd.Flags().StringP("output", "o", "table", "Output format (table, strimzi, json)")
 	addACLExportFlags(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("resource-type", completeACLResourceTypes())
 	_ = cmd.RegisterFlagCompletionFunc("resource-name", completeACLResourceNames())
-	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats())
+	_ = cmd.RegisterFlagCompletionFunc("output", completeACLOutputFormats())
 	return cmd
 }
 

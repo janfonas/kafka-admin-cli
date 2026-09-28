@@ -84,7 +84,7 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 		return fmt.Errorf("failed to delete ACL (timeout=%v): %w", ACLRequestTimeout, err)
 	}
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
-		return formatACLError("delete ACL", resp.Results[0].ErrorCode)
+		return aclError("delete ACL", resp.Results[0].ErrorCode, resp.Results[0].ErrorMessage)
 	}
 	return nil
 }
@@ -108,13 +108,28 @@ func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, prin
 	return nil
 }
 
-// GetAcl Retrieves ACL entries matching the specified filters.
-// All parameters are optional — empty strings are treated as "any" (match all).
-// Returns a list of ACL resources that match the criteria.
-func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
+// DescribeAcls Retrieves ACL entries matching the specified filters.
+// Empty filters match everything; an empty result is not an error.
+func (c *Client) DescribeAcls(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
+	return c.describeACLs(ctx, "describe ACLs", resourceType, resourceName, principal)
+}
+
+func (c *Client) describeACLs(ctx context.Context, operation, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
 	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
+	// Strimzi clusters without an authorizer configured do not advertise DescribeACLs (key 29).
+	supported, _, err := c.CheckAPISupport(ctx, 29)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ACL API support: %w", err)
+	}
+	if !supported {
+		return nil, fmt.Errorf("broker does not support the DescribeACLs API (key 29). " +
+			"This typically means no ACL authorizer is configured on the Kafka cluster. " +
+			"For Strimzi, set 'authorization' in the Kafka custom resource (e.g., type: simple)")
+	}
+
+	// Unset filters must be ANY; the zero value means UNKNOWN, which brokers reject.
 	req := kmsg.NewPtrDescribeACLsRequest()
 	req.ResourceType = kmsg.ACLResourceTypeAny
 	req.ResourcePatternType = kmsg.ACLResourcePatternTypeAny
@@ -137,12 +152,23 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 
 	resp, err := req.RequestWith(ctx, c.client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ACL (timeout=%v): %w", ACLRequestTimeout, err)
+		return nil, fmt.Errorf("failed to %s (timeout=%v): %w", operation, ACLRequestTimeout, err)
 	}
 	if resp.ErrorCode != 0 {
-		return nil, formatACLError("get ACL", resp.ErrorCode)
+		return nil, aclError(operation, resp.ErrorCode, resp.ErrorMessage)
 	}
-	if len(resp.Resources) == 0 {
+	return resp.Resources, nil
+}
+
+// GetAcl Retrieves ACL entries matching the specified filters.
+// All parameters are optional — empty strings are treated as "any" (match all).
+// Returns an error when no ACL matches, for interactive use.
+func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, principal string) ([]kmsg.DescribeACLsResponseResource, error) {
+	resources, err := c.describeACLs(ctx, "get ACL", resourceType, resourceName, principal)
+	if err != nil {
+		return nil, err
+	}
+	if len(resources) == 0 {
 		parts := []string{}
 		if resourceType != "" {
 			parts = append(parts, "resource type "+resourceType)
@@ -159,47 +185,21 @@ func (c *Client) GetAcl(ctx context.Context, resourceType, resourceName, princip
 		}
 		return nil, fmt.Errorf("no ACLs found matching %s", filter)
 	}
-	return resp.Resources, nil
+	return resources, nil
 }
 
 // ListAcls Returns a list of all principals that have ACLs defined.
 func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
-	defer cancel()
-
-	// Check if the broker supports the DescribeACLs API (key 29).
-	// Strimzi clusters without an authorizer configured will not advertise this API.
-	supported, _, err := c.CheckAPISupport(ctx, 29)
+	resources, err := c.describeACLs(ctx, "list ACLs", "", "", "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to check ACL API support: %w", err)
-	}
-	if !supported {
-		return nil, fmt.Errorf("broker does not support the DescribeACLs API (key 29). " +
-			"This typically means no ACL authorizer is configured on the Kafka cluster. " +
-			"For Strimzi, set 'authorization' in the Kafka custom resource (e.g., type: simple)")
-	}
-
-	// Create a request with ALL filters set to ANY (1) to match everything.
-	// The default value 0 means UNKNOWN which brokers reject.
-	req := kmsg.NewPtrDescribeACLsRequest()
-	req.ResourceType = kmsg.ACLResourceTypeAny
-	req.ResourcePatternType = kmsg.ACLResourcePatternTypeAny
-	req.Operation = kmsg.ACLOperationAny
-	req.PermissionType = kmsg.ACLPermissionTypeAny
-	resp, err := req.RequestWith(ctx, c.client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ACLs (timeout=%v): %w", ACLRequestTimeout, err)
-	}
-
-	if resp.ErrorCode != 0 {
-		return nil, formatACLError("list ACLs", resp.ErrorCode)
+		return nil, err
 	}
 
 	// Create a map to store unique principals
 	principalSet := make(map[string]struct{})
 
 	// Process each ACL result
-	for _, resource := range resp.Resources {
+	for _, resource := range resources {
 		for _, acl := range resource.ACLs {
 			// Include all principals, not just those with "User:" prefix
 			principalSet[acl.Principal] = struct{}{}
@@ -215,33 +215,11 @@ func (c *Client) ListAcls(ctx context.Context) ([]string, error) {
 	return principals, nil
 }
 
-// formatACLError translates Kafka error codes into human-readable error messages
-// for ACL operations.
-func formatACLError(operation string, code int16) error {
-	switch code {
-	case 7:
-		return nil // Metadata still updating, treat as success
-	case 8:
-		return fmt.Errorf("failed to %s: security is disabled on the broker (no authorizer configured). "+
-			"For Strimzi, set 'authorization' in the Kafka custom resource (e.g., type: simple)", operation)
-	case 31:
-		return fmt.Errorf("failed to %s: cluster authorization failed. "+
-			"The authenticated user does not have permission to describe ACLs. "+
-			"Ensure the KafkaUser has 'Describe' permission on the 'Cluster' resource", operation)
-	case 87:
-		return fmt.Errorf("failed to %s: invalid resource type or name", operation)
-	case 88:
-		return fmt.Errorf("failed to %s: invalid principal format", operation)
-	default:
-		return fmt.Errorf("failed to %s: error code %d", operation, code)
-	}
-}
-
 // handleACLCreateError Processes error codes from ACL creation requests
 // and returns appropriate error messages.
 func handleACLCreateError(resp *kmsg.CreateACLsResponse) error {
 	if len(resp.Results) > 0 && resp.Results[0].ErrorCode != 0 {
-		return formatACLError("create ACL", resp.Results[0].ErrorCode)
+		return aclError("create ACL", resp.Results[0].ErrorCode, resp.Results[0].ErrorMessage)
 	}
 	return nil
 }

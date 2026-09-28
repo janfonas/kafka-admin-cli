@@ -17,6 +17,7 @@ type mockClient struct {
 	createACLsResponse   *kmsg.CreateACLsResponse
 	deleteACLsResponse   *kmsg.DeleteACLsResponse
 	describeACLsResponse *kmsg.DescribeACLsResponse
+	metadataResponse     *kmsg.MetadataResponse
 	deleteGroupsResponse *mockDeleteGroupsResponse
 }
 
@@ -43,6 +44,8 @@ func (m *mockClient) RequestWith(ctx context.Context, req kmsg.Request) (kmsg.Re
 		return m.deleteACLsResponse, nil
 	case *kmsg.DescribeACLsRequest:
 		return m.describeACLsResponse, nil
+	case *kmsg.MetadataRequest:
+		return m.metadataResponse, nil
 	case *kmsg.DeleteGroupsRequest:
 		// Create a DeleteGroupsResponse with the mock error code
 		if m.deleteGroupsResponse != nil {
@@ -77,6 +80,8 @@ func newMockClient(responses ...kmsg.Response) kafkaClient {
 			mock.deleteACLsResponse = r
 		case *kmsg.DescribeACLsResponse:
 			mock.describeACLsResponse = r
+		case *kmsg.MetadataResponse:
+			mock.metadataResponse = r
 		}
 	}
 	return mock

@@ -12,6 +12,9 @@ import (
 func runACLList(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	outputFormat, _ := cmd.Flags().GetString("output")
+	if err := validateACLOutputFormat(outputFormat); err != nil {
+		return err
+	}
 	exportOptions, err := readACLExportOptions(cmd, outputFormat)
 	if err != nil {
 		return err
@@ -38,6 +41,8 @@ func runACLList(cmd *cobra.Command, args []string) error {
 	defer client.Close()
 
 	switch outputFormat {
+	case outputJSON:
+		return exportACLJSON(ctx, cmd.OutOrStdout(), client, "", "", "")
 	case outputStrimzi:
 		// For strimzi output, fetch full ACL details instead of just principals
 		acls, err := client.GetAcl(ctx, "", "", "")
@@ -184,6 +189,9 @@ func runACLGet(cmd *cobra.Command, args []string) error {
 	resourceName, _ := cmd.Flags().GetString("resource-name")
 	principal, _ := cmd.Flags().GetString("principal")
 	outputFormat, _ := cmd.Flags().GetString("output")
+	if err := validateACLOutputFormat(outputFormat); err != nil {
+		return err
+	}
 	exportOptions, err := readACLExportOptions(cmd, outputFormat)
 	if err != nil {
 		return err
@@ -208,6 +216,10 @@ func runACLGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer client.Close()
+
+	if outputFormat == outputJSON {
+		return exportACLJSON(ctx, cmd.OutOrStdout(), client, resourceType, resourceName, principal)
+	}
 
 	// Get ACL details
 	acls, err := client.GetAcl(ctx, resourceType, resourceName, principal)

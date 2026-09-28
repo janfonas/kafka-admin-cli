@@ -31,12 +31,12 @@ func formatTopicTable(w io.Writer, details *kafka.TopicDetails) {
 }
 
 // formatTopicStrimzi renders a single topic as a Strimzi KafkaTopic CR YAML manifest.
-func formatTopicStrimzi(w io.Writer, details *kafka.TopicDetails) error {
-	return formatTopicListStrimzi(w, []*kafka.TopicDetails{details})
+func formatTopicStrimzi(w io.Writer, details *kafka.TopicDetails, apiVersion string) error {
+	return formatTopicListStrimzi(w, []*kafka.TopicDetails{details}, apiVersion)
 }
 
 // formatTopicListStrimzi renders multiple topics as Strimzi KafkaTopic CR YAML manifests.
-func formatTopicListStrimzi(w io.Writer, topics []*kafka.TopicDetails) error {
+func formatTopicListStrimzi(w io.Writer, topics []*kafka.TopicDetails, apiVersion string) error {
 	manifests := make([]strimziManifest[strimziTopicSpec], 0, len(topics))
 	topicByName := make(map[string]string)
 	for _, details := range topics {
@@ -57,7 +57,7 @@ func formatTopicListStrimzi(w io.Writer, topics []*kafka.TopicDetails) error {
 			spec.TopicName = details.Name
 		}
 		manifests = append(manifests, strimziManifest[strimziTopicSpec]{
-			APIVersion: "kafka.strimzi.io/v1beta2",
+			APIVersion: strimziAPIVersionOrDefault(apiVersion),
 			Kind:       "KafkaTopic",
 			Metadata:   strimziMetadata{Name: resourceName},
 			Spec:       spec,

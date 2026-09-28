@@ -40,6 +40,9 @@ func (c *Client) ListConsumerGroups(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list consumer groups: %w", err)
 	}
+	if resp.ErrorCode != 0 {
+		return nil, requestError("list consumer groups", resp.ErrorCode, nil)
+	}
 
 	var groups []string
 	for _, group := range resp.Groups {
@@ -66,7 +69,7 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 
 	group := descResp.Groups[0]
 	if group.ErrorCode != 0 {
-		return nil, handleConsumerGroupError(group.ErrorCode)
+		return nil, requestError(fmt.Sprintf("describe consumer group %q", groupID), group.ErrorCode, group.ErrorMessage)
 	}
 
 	// Parse members and their assignments
@@ -247,7 +250,7 @@ func (c *Client) SetConsumerGroupOffsets(ctx context.Context, groupID, topic str
 	if len(resp.Topics) > 0 && len(resp.Topics[0].Partitions) > 0 {
 		errorCode := resp.Topics[0].Partitions[0].ErrorCode
 		if errorCode != 0 {
-			return handleConsumerGroupError(errorCode)
+			return requestError(fmt.Sprintf("commit offset for consumer group %q", groupID), errorCode, nil)
 		}
 	}
 
@@ -265,38 +268,7 @@ func (c *Client) DeleteConsumerGroup(ctx context.Context, groupID string) error 
 	}
 
 	if len(resp.Groups) > 0 && resp.Groups[0].ErrorCode != 0 {
-		switch resp.Groups[0].ErrorCode {
-		case 7:
-			// Error code 7 during deletion usually means the operation was successful
-			// but the metadata is still being updated
-			return nil
-		case 15:
-			return fmt.Errorf("consumer group not found: %s", groupID)
-		case 24:
-			return fmt.Errorf("invalid consumer group id: %s", groupID)
-		case 25:
-			return fmt.Errorf("consumer group is not empty: %s", groupID)
-		default:
-			return fmt.Errorf("failed to delete consumer group: error code %v", resp.Groups[0].ErrorCode)
-		}
-	}
-	return nil
-}
-
-// handleConsumerGroupError Processes error codes from consumer group operations
-// and returns appropriate error messages.
-func handleConsumerGroupError(errorCode int16) error {
-	if errorCode != 0 {
-		switch errorCode {
-		case 7:
-			return nil
-		case 15:
-			return fmt.Errorf("consumer group not found")
-		case 24:
-			return fmt.Errorf("invalid consumer group id")
-		default:
-			return fmt.Errorf("failed to process consumer group request: error code %v", errorCode)
-		}
+		return requestError(fmt.Sprintf("delete consumer group %q", groupID), resp.Groups[0].ErrorCode, nil)
 	}
 	return nil
 }

@@ -12,6 +12,10 @@ import (
 func runTopicList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	outputFormat, _ := cmd.Flags().GetString("output")
+	apiVersion, err := readStrimziAPIVersion(cmd, outputFormat)
+	if err != nil {
+		return err
+	}
 
 	// Get password if not provided
 	if promptPassword {
@@ -49,7 +53,7 @@ func runTopicList(cmd *cobra.Command, args []string) error {
 			}
 			topics = append(topics, details)
 		}
-		return formatTopicListStrimzi(cmd.OutOrStdout(), topics)
+		return formatTopicListStrimzi(cmd.OutOrStdout(), topics, apiVersion)
 	default:
 		topics, err := client.ListTopics(ctx)
 		if err != nil {
@@ -202,6 +206,10 @@ func runTopicGet(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	topic := args[0]
 	outputFormat, _ := cmd.Flags().GetString("output")
+	apiVersion, err := readStrimziAPIVersion(cmd, outputFormat)
+	if err != nil {
+		return err
+	}
 
 	// Get password if not provided
 	if promptPassword {
@@ -231,7 +239,7 @@ func runTopicGet(cmd *cobra.Command, args []string) error {
 
 	switch outputFormat {
 	case outputStrimzi:
-		return formatTopicStrimzi(cmd.OutOrStdout(), details)
+		return formatTopicStrimzi(cmd.OutOrStdout(), details, apiVersion)
 	default:
 		formatTopicTable(cmd.OutOrStdout(), details)
 	}

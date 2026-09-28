@@ -1,0 +1,10 @@
+{
+  "kind": "KafkaACLExport",
+  "schemaVersion": 1,
+  "clusterId": "Hm2pQ4rXS7yN0vB8kLd3aw",
+  "capturedAt": "2026-09-28T10:00:00Z",
+  "filter": {
+    "principal": "User:nobody"
+  },
+  "bindings": []
+}

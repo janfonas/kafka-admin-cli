@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -202,4 +203,22 @@ func (c *Client) CheckAPISupport(ctx context.Context, apiKey int16) (bool, int16
 		}
 	}
 	return false, 0, nil
+}
+
+// ClusterID returns the Kafka cluster ID reported in broker metadata.
+func (c *Client) ClusterID(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
+	defer cancel()
+
+	req := kmsg.NewPtrMetadataRequest()
+	// An empty, non-nil topic list requests broker metadata without topics.
+	req.Topics = []kmsg.MetadataRequestTopic{}
+	resp, err := req.RequestWith(ctx, c.client)
+	if err != nil {
+		return "", fmt.Errorf("failed to read cluster metadata: %w", err)
+	}
+	if resp.ClusterID == nil || *resp.ClusterID == "" {
+		return "", errors.New("broker metadata did not include a cluster ID")
+	}
+	return *resp.ClusterID, nil
 }

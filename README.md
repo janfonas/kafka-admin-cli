@@ -76,6 +76,8 @@ kac get consumergroups
 - View detailed ACL information with optional filters
 - Support for various resource types and operations
 - Export ACLs as Strimzi `KafkaUser` CRD YAML (`-o strimzi`)
+- Export ACLs as a versioned, lossless JSON document (`-o json`) for review,
+  diffing, and offline analysis
 
 ### Consumer Group Management
 - List all consumer groups
@@ -88,9 +90,23 @@ kac get consumergroups
 ### Output Formats
 - **table** (default) — human-readable tabular output
 - **strimzi** — Strimzi CRD YAML manifests, ready to apply with `kubectl`
+- **json** (ACL commands only) — a versioned `KafkaACLExport` document with every
+  ACL binding exactly as the broker reports it
 
-When using a structured output format (e.g. `strimzi`), connection status messages
-are suppressed so output can be safely piped to tools like `yq` or `kubectl apply`.
+When using a structured output format (e.g. `strimzi` or `json`), connection status messages
+are suppressed so output can be safely piped to tools like `yq`, `jq`, or `kubectl apply`.
+ACL commands reject unknown `--output` values instead of falling back to the table.
+
+### Error Handling
+Every non-zero Kafka error code is reported as a failure, including retriable
+codes such as `REQUEST_TIMED_OUT`. Messages name the operation, the numeric code,
+Kafka's error name, and any broker-provided detail, for example:
+
+```text
+failed to list ACLs (error code 7): REQUEST_TIMED_OUT: The request timed out.
+```
+
+A timed-out or rejected request therefore never looks like an empty result.
 
 ### Shell Completion
 Dynamic shell completion for bash, zsh, fish, and PowerShell. Tab-complete topic
@@ -270,7 +286,17 @@ kac get topics -o strimzi
 
 # Pipe to kubectl
 kac get topic mytopic -o strimzi | kubectl apply -f -
+
+# Target a Strimzi release that serves only the v1 API
+kac get topics -o strimzi --strimzi-api-version kafka.strimzi.io/v1
 ```
+
+`--strimzi-api-version` selects the `apiVersion` of exported `KafkaTopic` and
+`KafkaUser` manifests. The default remains `kafka.strimzi.io/v1beta2` for
+existing clusters; use `kafka.strimzi.io/v1` for Strimzi releases that no longer
+serve `v1beta2` (Strimzi 1.2, for example, serves only `v1`). Check which versions
+your cluster serves with `kubectl api-resources --api-group=kafka.strimzi.io`.
+The flag requires `-o strimzi`.
 
 Topic exports retain valid Kubernetes names. Other names are mapped using
 Strimzi's legacy Topic Operator convention: a sanitized prefix followed by `---`
@@ -279,6 +305,11 @@ and a hash of the original name. The original Kafka name is preserved in
 dot exposed by prefix truncation is removed to keep the resource name valid.
 Multiple topics are emitted as YAML documents separated by `---`; name collisions
 cause the export to fail before writing any manifests.
+
+A topic whose metadata or configuration cannot be read (for example because the
+user lacks `DescribeConfigs` on it) is skipped with a warning on stderr instead of
+being exported without its configuration. Check stderr before applying a
+multi-topic export: a skipped topic is missing from the output.
 
 ### ACL Commands
 
@@ -332,15 +363,26 @@ kac get acls -o strimzi --discover-scram --tls-authentication tls
 
 # Pipe to kubectl
 kac get acl --principal User:alice -o strimzi | kubectl apply -f -
+
+# Export every ACL binding as versioned JSON
+kac get acls -o json > acls.json
+
+# Export a filtered subset (recorded in the document as a partial listing)
+kac get acl --principal User:alice -o json
 ```
 
 **Output format flag (`-o, --output`):**
 - `table` (default): human-readable text
+- `json`: a lossless `KafkaACLExport` document; see [JSON ACL Export](#json-acl-export).
 - `strimzi`: Strimzi `KafkaUser` CRD YAML with `spec.authorization.acls`.
   Operations sharing the same resource, host, and permission are merged.
   The default `type: allow` is omitted since it is the Strimzi default.
   Cluster ACL resources contain only `type: cluster`; Kafka's cluster resource
   name and pattern type are not fields in the Strimzi cluster ACL schema.
+  Values a `KafkaUser` cannot represent (delegation-token or user resources,
+  token operations, or non-literal/prefix patterns) fail the export instead of
+  producing a manifest Strimzi would reject. `--strimzi-api-version` applies here
+  as for topics.
 
 ACL exports produce one document per principal, separated by `---`.
 `User:alice` becomes a KafkaUser named `alice` with authentication omitted.
@@ -381,6 +423,49 @@ manifests; user identities are never silently renamed or merged.
 
 Broker-provided strings in both ACL and topic exports are serialized as YAML
 data, not interpreted as manifest structure.
+
+#### JSON ACL Export
+
+`-o json` writes one JSON document containing every binding exactly as the
+broker reports it: no operations are merged, no defaults are dropped, and values
+use Kafka's own names (`TOPIC`, `PREFIXED`, `READ`, `ALLOW`, ...).
+
+```json
+{
+  "kind": "KafkaACLExport",
+  "schemaVersion": 1,
+  "clusterId": "Hm2pQ4rXS7yN0vB8kLd3aw",
+  "capturedAt": "2026-09-28T10:00:00Z",
+  "filter": {},
+  "bindings": [
+    {
+      "principal": "User:CN=orders-app",
+      "host": "*",
+      "resourceType": "TOPIC",
+      "resourceName": "orders",
+      "patternType": "LITERAL",
+      "operation": "READ",
+      "permission": "ALLOW"
+    }
+  ]
+}
+```
+
+- `schemaVersion` is incremented on any incompatible change; consumers should
+  reject versions they do not know.
+- `clusterId` is the Kafka cluster ID from broker metadata, and `capturedAt`
+  is the UTC time the listing was requested.
+- `filter` records the filters used. `{}` means a complete listing; any
+  populated field (`resourceType`, `resourceName`, `principal`) means the
+  document is a partial listing and must not be treated as a full inventory.
+- `bindings` is sorted deterministically, so two exports of the same cluster
+  can be compared with `diff`. An empty listing is written as `[]` and exits
+  successfully; `kac get acl` in table mode still reports "no ACLs found".
+- The export fails without writing anything if the broker returns an error,
+  a non-concrete value (`ANY`, `MATCH`, `UNKNOWN`), or duplicate bindings.
+
+The JSON contains principals and resource names but no credentials. Treat it as
+sensitive operational data.
 
 ### Consumer Group Commands
 

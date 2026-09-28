@@ -18,6 +18,8 @@ type aclExportOptions struct {
 	tlsAuthentication string
 	discoverSCRAM     bool
 	scramCredentials  map[string][]kmsg.DescribeUserSCRAMCredentialsResponseResultCredentialInfo
+	// Empty means the default Strimzi API version.
+	apiVersion string
 }
 
 type scramCredentialDescriber interface {
@@ -25,6 +27,7 @@ type scramCredentialDescriber interface {
 }
 
 func addACLExportFlags(cmd *cobra.Command) {
+	addStrimziAPIVersionFlag(cmd)
 	cmd.Flags().Bool("discover-scram", false, "Discover SCRAM-SHA-512 credentials for Strimzi ACL exports (requires Describe on Cluster)")
 	cmd.Flags().String("tls-authentication", tlsAuthenticationExternal, "Authentication for CN principals in Strimzi exports (tls-external, tls)")
 	_ = cmd.RegisterFlagCompletionFunc("tls-authentication", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
@@ -60,6 +63,10 @@ func readACLExportOptions(cmd *cobra.Command, outputFormat string) (aclExportOpt
 	}
 	if outputFormat != outputStrimzi && (options.discoverSCRAM || cmd.Flags().Changed("tls-authentication")) {
 		return options, fmt.Errorf("--discover-scram and --tls-authentication require --output strimzi")
+	}
+	options.apiVersion, err = readStrimziAPIVersion(cmd, outputFormat)
+	if err != nil {
+		return options, err
 	}
 	return options, nil
 }
