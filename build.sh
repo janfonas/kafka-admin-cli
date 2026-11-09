@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -euo pipefail
+cd "$(dirname "$0")"
+
 # Parse command line arguments
 SKIP_TESTS=false
 while [[ $# -gt 0 ]]; do
@@ -15,10 +18,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+go mod tidy -diff
+go mod verify
+
 # Run tests unless skipped
 if [ "$SKIP_TESTS" = false ]; then
     echo "Running tests..."
-    go test ./... || exit 1
+    go test ./...
 fi
 
 # Get version information
@@ -29,9 +35,6 @@ BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M:%S')
 echo "Building kac version ${VERSION}..."
 echo "Git commit: ${GIT_COMMIT}"
 echo "Build date: ${BUILD_DATE}"
-
-# Run go mod tidy to ensure dependencies are up to date
-go mod tidy
 
 # Build the binary
 go build \

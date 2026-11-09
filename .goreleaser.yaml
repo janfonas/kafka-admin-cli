@@ -2,7 +2,8 @@ version: 2
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
+    - go mod verify
 
 builds:
   - binary: kac
@@ -15,6 +16,10 @@ builds:
     goarch:
       - amd64
       - arm64
+    hooks:
+      post:
+        - cmd: govulncheck -mode=binary "{{ .Path }}"
+          output: true
     ldflags:
       - -s -w
       - -X github.com/janfonas/kafka-admin-cli/cmd.version={{.Version}}
