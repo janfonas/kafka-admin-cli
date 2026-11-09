@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,47 +9,44 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func runConsumerGroupList(cmd *cobra.Command, args []string) {
-	ctx := context.Background()
+func runConsumerGroupList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 
 	// Get password if not provided
 	if promptPassword {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// List consumer groups
 	groups, err := client.ListConsumerGroups(ctx)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	// Print consumer groups
 	for _, group := range groups {
 		fmt.Fprintln(cmd.OutOrStdout(), group)
 	}
+	return nil
 }
 
-func runConsumerGroupGet(cmd *cobra.Command, args []string) {
+func runConsumerGroupGet(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID is required")
-		return
+		return fmt.Errorf("group ID is required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	groupID := args[0]
 
 	// Get password if not provided
@@ -58,24 +54,21 @@ func runConsumerGroupGet(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Get consumer group details
 	details, err := client.GetConsumerGroup(ctx, groupID)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	// Print consumer group details
@@ -113,28 +106,26 @@ func runConsumerGroupGet(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
+	return nil
 }
 
-func runConsumerGroupSetOffsets(cmd *cobra.Command, args []string) {
+func runConsumerGroupSetOffsets(cmd *cobra.Command, args []string) error {
 	if len(args) < 4 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID, topic, partition, and offset are required")
-		return
+		return fmt.Errorf("group ID, topic, partition, and offset are required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	groupID := args[0]
 	topic := args[1]
 
 	partition, err := strconv.ParseInt(args[2], 10, 32)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid partition: %v\n", err)
-		return
+		return fmt.Errorf("invalid partition: %w", err)
 	}
 
 	offset, err := strconv.ParseInt(args[3], 10, 64)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid offset: %v\n", err)
-		return
+		return fmt.Errorf("invalid offset: %w", err)
 	}
 
 	// Get password if not provided
@@ -142,36 +133,33 @@ func runConsumerGroupSetOffsets(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Set consumer group offsets
 	err = client.SetConsumerGroupOffsets(ctx, groupID, topic, int32(partition), offset)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), "Consumer group offsets set successfully")
+	return nil
 }
 
-func runConsumerGroupDelete(cmd *cobra.Command, args []string) {
+func runConsumerGroupDelete(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: group ID is required")
-		return
+		return fmt.Errorf("group ID is required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	groupID := args[0]
 
 	// Get password if not provided
@@ -179,25 +167,23 @@ func runConsumerGroupDelete(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Delete consumer group
 	err = client.DeleteConsumerGroup(ctx, groupID)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Consumer group %s deleted successfully\n", groupID)
+	return nil
 }

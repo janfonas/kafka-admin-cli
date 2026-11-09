@@ -31,11 +31,13 @@ sudo mv kac /usr/local/bin/
 # Download the ZIP file from the releases page and extract kac.exe
 ```
 
-> **Note:** Releases up to and including the current one ship the binary as
-> `kafka-admin-cli` — for those, rename it during install:
+> **Note:** v0.4.0 archives contain `kac` (`kac.exe` on Windows). If an older
+> archive contains `kafka-admin-cli`, rename it during install:
 > `sudo mv kafka-admin-cli /usr/local/bin/kac`.
 
 #### Build from Source
+The current source requires Go 1.26.10 or newer. Release builds use Go 1.27.3.
+
 ```bash
 # Using go install
 go install github.com/janfonas/kafka-admin-cli@latest
@@ -107,6 +109,9 @@ failed to list ACLs (error code 7): REQUEST_TIMED_OUT: The request timed out.
 ```
 
 A timed-out or rejected request therefore never looks like an empty result.
+Command failures are written to stderr and exit with status 1, including topic
+and ACL mutations, consumer-group operations, and invalid arguments. Successful
+commands exit with status 0.
 
 ### Shell Completion
 Dynamic shell completion for bash, zsh, fish, and PowerShell. Tab-complete topic
@@ -195,11 +200,16 @@ kac --brokers kafka1:9092 --username alice --prompt-password --insecure get topi
 ```
 
 ### Credential Priority Order
-When using stored credentials, the following priority order applies:
-1. Command-line flags (`--brokers`, `--username`, `--password`)
-2. Active profile (set via `kac profile switch`)
-3. Default profile (if `--profile` flag is not specified)
-4. Interactive prompt (if `--prompt-password` is used)
+Explicit connection flags override the selected profile, field by field:
+`--brokers`, `--username`, `--password`, `--sasl-mechanism`, `--ca-cert`, and
+`--insecure`. Explicit values such as `--insecure=false`, `--ca-cert=`, and
+`--sasl-mechanism=SCRAM-SHA-512` are preserved, even when they match a flag default.
+Unspecified fields are filled from the profile, so partial overrides work.
+
+Profile selection uses `--profile` first, then the active profile, then `default`.
+An explicitly named missing profile is an error. Without `--profile`, unavailable
+stored credentials do not prevent using command-line credentials. Password
+prompting occurs when `--prompt-password` is used or a username has no password.
 
 ## Command Reference
 
@@ -483,13 +493,49 @@ kac set-offsets consumergroup my-group-id my-topic 0 1000
 kac delete consumergroup my-group-id
 ```
 
+Offset details cover the group's currently assigned partitions. Request errors,
+broker errors, missing response entries, and unavailable end offsets fail the
+command rather than showing zero lag or "At latest". An end offset of zero is
+shown as "Empty". A committed offset of -1 means no offset has been committed;
+its displayed lag uses the end offset, which is an offset distance, not an exact
+message count for compacted or retention-trimmed topics. Groups without assigned
+partitions have no offset details. Non-consumer protocols, such as Kafka Connect
+and Schema Registry, retain their member details without decoding their
+protocol-specific assignments as consumer partitions.
+
 ## Build Information
 
 The build script (`build.sh`) provides:
 - Version information from git tags
-- CGO disabled for better portability
 - Stripped debug information for smaller binary size
-- Dependency management with `go mod tidy`
+- Dependency checks with `go mod tidy -diff` and `go mod verify` before tests
+- Tests before compilation (unless `-skip-tests` is specified)
+- Immediate failure if dependency validation, tests, or compilation fails
+
+CI runs race-enabled tests, `go vet`, and `govulncheck` on Go 1.26.10 and 1.27.3.
+It also builds all six release targets (Linux, macOS, and Windows on amd64 and
+arm64) using Go 1.27.3 with CGO disabled and scans every resulting binary.
+Tag-triggered publishing requires these checks to pass and scans the actual
+release binaries again before publishing.
+
+To validate a release locally without publishing, use Go 1.27.3 and GoReleaser
+v2.20.0, with `govulncheck` on your `PATH`:
+
+```bash
+go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+GOWORK=off GOTOOLCHAIN=local goreleaser release --snapshot --clean
+```
+
+This writes build output under `dist/`; `--clean` removes any previous output
+there. The GoReleaser hooks validate dependencies without changing module files.
+
+### v0.4.1 Changes (2026-11-09)
+- Security: require Go 1.26.10+, build releases with Go 1.27.3, and update
+  `github.com/klauspost/compress` to v1.20.2.
+- Add dual-toolchain CI and source/binary vulnerability gates for releases.
+- Preserve explicit connection flags when merging saved credentials.
+- Return nonzero exit status for failed mutations and consumer-group commands.
+- Report unavailable consumer-group offsets as errors instead of zero lag.
 
 ## License
 

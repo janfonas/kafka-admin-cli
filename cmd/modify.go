@@ -26,7 +26,7 @@ func newModifyTopicCmd() *cobra.Command {
 		Use:               "topic [name]",
 		Short:             "Modify topic configuration",
 		Args:              cobra.ExactArgs(1),
-		Run:               runTopicModify,
+		RunE:              runTopicModify,
 		ValidArgsFunction: completeTopicNames,
 	}
 	cmd.Flags().StringSliceP("config", "c", nil, "Topic configuration in format key=value (can be specified multiple times)")
@@ -38,7 +38,7 @@ func newModifyACLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acl",
 		Short: "Modify an ACL",
-		Run:   runACLModify,
+		RunE:  runACLModify,
 	}
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")

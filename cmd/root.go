@@ -81,14 +81,9 @@ Provides tools for managing topics, ACLs, and consumer groups.`,
 				}
 			}
 
-			// Load from profile if no flags provided and profile exists
-			if brokers == "" && username == "" && password == "" {
-				if err := loadCredentialsFromProfile(); err != nil {
-					// Only error if profile was explicitly specified
-					if cmd.Flags().Changed("profile") {
-						return err
-					}
-					// Otherwise, continue - user might provide flags via env vars or will get validation error later
+			if err := loadCredentialsFromProfile(cmd); err != nil {
+				if cmd.Flags().Changed("profile") {
+					return err
 				}
 			}
 
@@ -142,29 +137,29 @@ func readPassword() (string, error) {
 	return string(passwordBytes), nil
 }
 
-func loadCredentialsFromProfile() error {
+func loadCredentialsFromProfile(cmd *cobra.Command) error {
 	prof, err := credentials.Load(profile)
 	if err != nil {
 		return err
 	}
 
 	// Only set values that weren't provided via flags
-	if brokers == "" {
+	if !cmd.Flags().Changed("brokers") {
 		brokers = prof.Brokers
 	}
-	if username == "" {
+	if !cmd.Flags().Changed("username") {
 		username = prof.Username
 	}
-	if password == "" {
+	if !cmd.Flags().Changed("password") {
 		password = prof.Password
 	}
-	if saslMechanism == "SCRAM-SHA-512" && prof.SASLMechanism != "" {
+	if !cmd.Flags().Changed("sasl-mechanism") && prof.SASLMechanism != "" {
 		saslMechanism = prof.SASLMechanism
 	}
-	if caCertPath == "" {
+	if !cmd.Flags().Changed("ca-cert") {
 		caCertPath = prof.CACertPath
 	}
-	if !insecure {
+	if !cmd.Flags().Changed("insecure") {
 		insecure = prof.Insecure
 	}
 

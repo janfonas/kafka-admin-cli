@@ -26,7 +26,7 @@ func newSetOffsetsConsumerGroupCmd() *cobra.Command {
 		Aliases:           []string{"cg"},
 		Short:             "Set consumer group offsets",
 		Args:              cobra.ExactArgs(4),
-		Run:               runConsumerGroupSetOffsets,
+		RunE:              runConsumerGroupSetOffsets,
 		ValidArgsFunction: completeSetOffsetsArgs,
 	}
 	return cmd

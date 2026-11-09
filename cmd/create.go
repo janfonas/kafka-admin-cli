@@ -26,7 +26,7 @@ func newCreateTopicCmd() *cobra.Command {
 		Use:   "topic [name]",
 		Short: "Create a new topic",
 		Args:  cobra.ExactArgs(1),
-		Run:   runTopicCreate,
+		RunE:  runTopicCreate,
 	}
 	cmd.Flags().IntP("partitions", "p", 1, "Number of partitions")
 	cmd.Flags().IntP("replication-factor", "r", 1, "Replication factor")
@@ -38,7 +38,7 @@ func newCreateACLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acl",
 		Short: "Create a new ACL",
-		Run:   runACLCreate,
+		RunE:  runACLCreate,
 	}
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")

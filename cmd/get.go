@@ -89,7 +89,7 @@ func newGetConsumerGroupsCmd() *cobra.Command {
 		Use:     "consumergroups",
 		Aliases: []string{"cg"},
 		Short:   "List all consumer groups",
-		Run:     runConsumerGroupList,
+		RunE:    runConsumerGroupList,
 	}
 	return cmd
 }
@@ -101,7 +101,7 @@ func newGetConsumerGroupCmd() *cobra.Command {
 		Aliases:           []string{"cg"},
 		Short:             "Get consumer group details",
 		Args:              cobra.ExactArgs(1),
-		Run:               runConsumerGroupGet,
+		RunE:              runConsumerGroupGet,
 		ValidArgsFunction: completeConsumerGroupIDs,
 	}
 	return cmd

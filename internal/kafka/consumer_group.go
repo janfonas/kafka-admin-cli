@@ -66,6 +66,9 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 	if len(descResp.Groups) == 0 {
 		return nil, fmt.Errorf("group not found: %s", groupID)
 	}
+	if len(descResp.Groups) != 1 || descResp.Groups[0].Group != groupID {
+		return nil, fmt.Errorf("invalid description response for consumer group %q", groupID)
+	}
 
 	group := descResp.Groups[0]
 	if group.ErrorCode != 0 {
@@ -78,12 +81,12 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 
 	for _, member := range group.Members {
 		assignments := make(map[string][]int32)
-		if member.MemberAssignment != nil {
+		if group.ProtocolType == "consumer" && member.MemberAssignment != nil {
 			// Parse member assignment
 			var memberAssignment kmsg.ConsumerMemberAssignment
 			err := memberAssignment.ReadFrom(member.MemberAssignment)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("invalid assignment for member %q of consumer group %q: %w", member.ClientID, groupID, err)
 			}
 
 			for _, topic := range memberAssignment.Topics {
@@ -122,7 +125,30 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 		offsetReq.Groups = []kmsg.OffsetFetchRequestGroup{offsetReqGroup} // v8+
 		offsetResp, err := offsetReq.RequestWith(ctx, c.client)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to fetch offsets for consumer group %q topic %q: %w", groupID, topic, err)
+		}
+		if offsetResp.ErrorCode != 0 {
+			return nil, requestError(fmt.Sprintf("fetch offsets for consumer group %q topic %q", groupID, topic), offsetResp.ErrorCode, nil)
+		}
+
+		currentByPartition := make(map[int32]int64, len(partitions))
+		for _, responseTopic := range offsetResp.Topics {
+			if responseTopic.Topic != topic {
+				continue
+			}
+			for _, responsePartition := range responseTopic.Partitions {
+				operation := fmt.Sprintf("fetch offset for consumer group %q topic %q partition %d", groupID, topic, responsePartition.Partition)
+				if responsePartition.ErrorCode != 0 {
+					return nil, requestError(operation, responsePartition.ErrorCode, nil)
+				}
+				if _, exists := currentByPartition[responsePartition.Partition]; exists {
+					return nil, fmt.Errorf("failed to %s: duplicate partition", operation)
+				}
+				if responsePartition.Offset < -1 {
+					return nil, fmt.Errorf("failed to %s: invalid committed offset %d", operation, responsePartition.Offset)
+				}
+				currentByPartition[responsePartition.Partition] = responsePartition.Offset
+			}
 		}
 
 		// Get end offsets
@@ -142,71 +168,48 @@ func (c *Client) GetConsumerGroup(ctx context.Context, groupID string) (*Consume
 		endOffsetReq.Topics = []kmsg.ListOffsetsRequestTopic{endOffsetReqTopic}
 		endOffsetResp, err := endOffsetReq.RequestWith(ctx, c.client)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to fetch end offsets for consumer group %q topic %q: %w", groupID, topic, err)
 		}
 
-		// Index response partitions by partition ID so lookups below are O(1)
-		// rather than O(N) per partition. Partition-level errors are treated the
-		// same as a missing entry (offset of -1), which downstream logic already
-		// handles as "no committed offset" / "no end offset".
-		currentByPartition := make(map[int32]int64, len(offsetResp.Topics[0].Partitions))
-		for _, respPart := range offsetResp.Topics[0].Partitions {
-			if respPart.ErrorCode != 0 {
+		endByPartition := make(map[int32]int64, len(partitions))
+		for _, responseTopic := range endOffsetResp.Topics {
+			if responseTopic.Topic != topic {
 				continue
 			}
-			currentByPartition[respPart.Partition] = respPart.Offset
-		}
-
-		endByPartition := make(map[int32]int64, len(endOffsetResp.Topics[0].Partitions))
-		for _, respPart := range endOffsetResp.Topics[0].Partitions {
-			if respPart.ErrorCode != 0 {
-				continue
+			for _, responsePartition := range responseTopic.Partitions {
+				operation := fmt.Sprintf("fetch end offset for consumer group %q topic %q partition %d", groupID, topic, responsePartition.Partition)
+				if responsePartition.ErrorCode != 0 {
+					return nil, requestError(operation, responsePartition.ErrorCode, nil)
+				}
+				if _, exists := endByPartition[responsePartition.Partition]; exists {
+					return nil, fmt.Errorf("failed to %s: duplicate partition", operation)
+				}
+				if responsePartition.Offset < 0 {
+					return nil, fmt.Errorf("failed to %s: unavailable end offset %d", operation, responsePartition.Offset)
+				}
+				endByPartition[responsePartition.Partition] = responsePartition.Offset
 			}
-			endByPartition[respPart.Partition] = respPart.Offset
 		}
 
 		offsets[topic] = make(map[int32]PartitionOffset)
 		for _, partition := range partitions {
 			current, ok := currentByPartition[partition]
 			if !ok {
-				current = -1
+				return nil, fmt.Errorf("missing committed offset for consumer group %q topic %q partition %d", groupID, topic, partition)
 			}
 			end, ok := endByPartition[partition]
 			if !ok {
-				end = -1
+				return nil, fmt.Errorf("missing end offset for consumer group %q topic %q partition %d", groupID, topic, partition)
 			}
 
-			var lag int64
-			var isEmpty bool
-			var endDisplay string
-
-			if end == -1 {
-				if current <= 0 {
-					// Truly empty partition: no messages ever produced
-					isEmpty = true
-					endDisplay = "Empty"
-					lag = 0
-				} else {
-					// Compacted partition or consumer caught up at latest offset
-					// Current offset > 0 means messages were consumed before
-					isEmpty = false
-					endDisplay = "At latest"
-					lag = 0 // Consumer is caught up
-				}
-			} else {
-				// Normal case: partition has messages
-				isEmpty = false
-				endDisplay = fmt.Sprintf("%d", end)
-				if current < 0 {
-					// Consumer hasn't committed any offset yet (never consumed)
-					lag = end // All messages are unread
-				} else {
-					// Normal case: calculate actual lag
-					lag = end - current
-					if lag < 0 {
-						lag = 0 // Consumer is ahead (rare edge case)
-					}
-				}
+			lag := end
+			if current >= 0 {
+				lag = max(end-current, 0)
+			}
+			isEmpty := end == 0
+			endDisplay := fmt.Sprintf("%d", end)
+			if isEmpty {
+				endDisplay = "Empty"
 			}
 
 			offsets[topic][partition] = PartitionOffset{

@@ -27,7 +27,7 @@ func newDeleteTopicCmd() *cobra.Command {
 		Use:               "topic [name]",
 		Short:             "Delete a topic",
 		Args:              cobra.ExactArgs(1),
-		Run:               runTopicDelete,
+		RunE:              runTopicDelete,
 		ValidArgsFunction: completeTopicNames,
 	}
 	return cmd
@@ -38,7 +38,7 @@ func newDeleteACLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acl",
 		Short: "Delete an ACL",
-		Run:   runACLDelete,
+		RunE:  runACLDelete,
 	}
 	cmd.Flags().String("resource-type", "", "Resource type (e.g., TOPIC)")
 	cmd.Flags().String("resource-name", "", "Resource name")
@@ -60,7 +60,7 @@ func newDeleteConsumerGroupCmd() *cobra.Command {
 		Aliases:           []string{"cg"},
 		Short:             "Delete a consumer group",
 		Args:              cobra.ExactArgs(1),
-		Run:               runConsumerGroupDelete,
+		RunE:              runConsumerGroupDelete,
 		ValidArgsFunction: completeConsumerGroupIDs,
 	}
 	return cmd

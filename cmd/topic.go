@@ -66,13 +66,12 @@ func runTopicList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTopicCreate(cmd *cobra.Command, args []string) {
+func runTopicCreate(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
-		return
+		return fmt.Errorf("topic name is required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	topic := args[0]
 
 	// Get flags
@@ -84,36 +83,33 @@ func runTopicCreate(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Create topic
 	err = client.CreateTopic(ctx, topic, partitions, replicationFactor)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s created successfully\n", topic)
+	return nil
 }
 
-func runTopicDelete(cmd *cobra.Command, args []string) {
+func runTopicDelete(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
-		return
+		return fmt.Errorf("topic name is required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	topic := args[0]
 
 	// Get password if not provided
@@ -121,36 +117,33 @@ func runTopicDelete(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Delete topic
 	err = client.DeleteTopic(ctx, topic)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s deleted successfully\n", topic)
+	return nil
 }
 
-func runTopicModify(cmd *cobra.Command, args []string) {
+func runTopicModify(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: topic name is required")
-		return
+		return fmt.Errorf("topic name is required")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	topic := args[0]
 
 	// Get flags
@@ -159,15 +152,13 @@ func runTopicModify(cmd *cobra.Command, args []string) {
 	for _, c := range configStr {
 		parts := strings.SplitN(c, "=", 2)
 		if len(parts) != 2 {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: invalid config format %q, expected key=value\n", c)
-			return
+			return fmt.Errorf("invalid config format %q, expected key=value", c)
 		}
 		config[parts[0]] = parts[1]
 	}
 
 	if len(config) == 0 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Error: at least one config parameter is required")
-		return
+		return fmt.Errorf("at least one config parameter is required")
 	}
 
 	// Get password if not provided
@@ -175,27 +166,25 @@ func runTopicModify(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Modify topic
 	err = client.ModifyTopic(ctx, topic, config)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Topic %s modified successfully\n", topic)
+	return nil
 }
 
 func runTopicGet(cmd *cobra.Command, args []string) error {

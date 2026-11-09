@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -63,8 +62,8 @@ func runACLList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runACLCreate(cmd *cobra.Command, args []string) {
-	ctx := context.Background()
+func runACLCreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 
 	// Get flags
 	resourceType, _ := cmd.Flags().GetString("resource-type")
@@ -79,31 +78,29 @@ func runACLCreate(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Create ACL
 	err = client.CreateAcl(ctx, resourceType, resourceName, principal, host, operation, permission)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), "ACL created successfully")
+	return nil
 }
 
-func runACLDelete(cmd *cobra.Command, args []string) {
-	ctx := context.Background()
+func runACLDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 
 	// Get flags
 	resourceType, _ := cmd.Flags().GetString("resource-type")
@@ -118,31 +115,29 @@ func runACLDelete(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Delete ACL
 	err = client.DeleteAcl(ctx, resourceType, resourceName, principal, host, operation, permission)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), "ACL deleted successfully")
+	return nil
 }
 
-func runACLModify(cmd *cobra.Command, args []string) {
-	ctx := context.Background()
+func runACLModify(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 
 	// Get flags
 	resourceType, _ := cmd.Flags().GetString("resource-type")
@@ -158,27 +153,25 @@ func runACLModify(cmd *cobra.Command, args []string) {
 		var err error
 		password, err = getPassword()
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-			return
+			return err
 		}
 	}
 
 	// Create Kafka client
 	client, err := kafka.NewClient(strings.Split(brokers, ","), username, password, caCertPath, saslMechanism, insecure)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 	defer client.Close()
 
 	// Modify ACL
 	err = client.ModifyAcl(ctx, resourceType, resourceName, principal, host, operation, permission, newPermission)
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), "ACL modified successfully")
+	return nil
 }
 
 func runACLGet(cmd *cobra.Command, args []string) error {
