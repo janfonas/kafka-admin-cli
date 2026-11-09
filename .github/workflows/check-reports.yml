@@ -1,0 +1,77 @@
+name: Scheduled Check Reports
+
+on:
+  workflow_run:
+    workflows: [CI, CodeQL, Release Audit]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: scheduled-check-reports-${{ github.event.workflow_run.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: >-
+      contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event.workflow_run.event) &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(fromJSON('["success", "failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Update tracking issue
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            for (const event of ['schedule', 'workflow_dispatch']) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: run.workflow_id,
+                branch: run.head_branch, event, status: 'completed', per_page: 1,
+              });
+              if (data.workflow_runs.some(candidate => candidate.id > run.id)) {
+                core.info('Ignoring a run superseded by a newer completed check.');
+                return;
+              }
+            }
+            const marker = `<!-- scheduled-check:${run.workflow_id} -->`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'all', per_page: 100,
+            });
+            const existing = issues.find(issue => !issue.pull_request &&
+              issue.user?.login === 'github-actions[bot]' && issue.body?.includes(marker));
+            const previous = existing?.body?.match(/<!-- latest-run:(\d+):(\d+) -->/);
+            if (previous && (Number(previous[1]) > run.id ||
+                (Number(previous[1]) === run.id && Number(previous[2]) >= run.run_attempt))) {
+              core.info('This result has already been reported or superseded.');
+              return;
+            }
+            if (run.conclusion === 'success' && !existing) return;
+            const body = [
+              marker,
+              `<!-- latest-run:${run.id}:${run.run_attempt} -->`,
+              `Latest result: **${run.conclusion}**`,
+              '',
+              `[Inspect workflow run ${run.run_number}](${run.html_url}) for job logs and scan artifacts.`,
+              '',
+              `Commit: \`${run.head_sha}\``,
+              '',
+              'Merges and releases remain manual. CodeQL findings are tracked separately in the Security tab.',
+            ].join('\n');
+            if (existing) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, body,
+                state: run.conclusion === 'success' ? 'closed' : 'open',
+                ...(run.conclusion === 'success' ? { state_reason: 'completed' } : {}),
+              });
+            } else {
+              await github.rest.issues.create({
+                owner, repo, title: `Scheduled checks: ${run.name}`, body,
+                assignees: [owner],
+              });
+            }

@@ -518,6 +518,37 @@ arm64) using Go 1.27.3 with CGO disabled and scans every resulting binary.
 Tag-triggered publishing requires these checks to pass and scans the actual
 release binaries again before publishing.
 
+### Automated Maintenance
+
+| Check | Schedule (UTC) |
+| --- | --- |
+| CI: tests, race checks, vet, dependency integrity, source and snapshot binary scans | Daily at 04:17 |
+| CodeQL: Go and GitHub Actions security analysis | Mondays at 05:29, plus pushes and pull requests |
+| Release Audit: checksums and vulnerability scans of all six latest published binaries | Mondays at 05:43 |
+| Dependabot: Go module and GitHub Actions update PRs | Mondays at 08:00 |
+
+Dependabot alerts and security-update PRs are enabled. All dependency merges and
+releases remain manual. Go compiler and scanner versions remain explicitly
+pinned; scheduled checks flag when those versions require maintenance.
+
+CI, CodeQL, and Release Audit can also be started through **Actions > Run
+workflow**. Scheduled and manual runs on `main` create or update one tracking
+issue per failing workflow, assigned to the repository owner. A successful
+subsequent check closes that issue; a later failure reopens it. PR failures and
+cancelled runs do not create tracking issues. CodeQL findings are reported in
+the **Security > Code scanning** view separately from workflow execution errors.
+Release-audit logs and binary metadata are retained as Actions artifacts for
+30 days. Enable GitHub notifications for assigned issues and security alerts to
+receive these results without checking the repository manually.
+
+Schedules are best effort and can be delayed. GitHub may disable scheduled
+workflows in a public repository after 60 days without activity; maintainers
+should re-enable them in Actions when needed. Merging regular update PRs keeps
+the repository active, but is not a guaranteed keep-alive. No external scheduler
+or automatic keep-alive commits are configured.
+
+### Local Release Validation
+
 To validate a release locally without publishing, use Go 1.27.3 and GoReleaser
 v2.20.0, with `govulncheck` on your `PATH`:
 

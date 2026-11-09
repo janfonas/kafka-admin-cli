@@ -1,0 +1,100 @@
+name: Release Audit
+
+on:
+  schedule:
+    - cron: '43 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  GOWORK: 'off'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Install vulnerability scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - name: Download and scan published binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit_dir="$RUNNER_TEMP/release-audit"
+          mkdir -p "$audit_dir"
+          cd "$audit_dir"
+          gh api "repos/$GH_REPO/releases/latest" > release.json
+          tag=$(jq -er '.tag_name' release.json)
+          gh release download --repo "$GH_REPO" --dir "$audit_dir" \
+            --pattern 'kafka-admin-cli_*.tar.gz' --pattern 'kafka-admin-cli_*.zip' \
+            --pattern checksums.txt -- "$tag"
+          printf '## Published release audit\n\nRelease: `%s`\n\n' "$tag" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          targets=('Linux x86_64' 'Linux arm64' 'Darwin x86_64' 'Darwin arm64' 'Windows x86_64' 'Windows arm64')
+          for target in "${targets[@]}"; do
+            read -r os arch <<< "$target"
+            name="kafka-admin-cli_${os}_${arch}"
+            extension=tar.gz
+            binary=kac
+            if [[ "$os" == Windows ]]; then
+              extension=zip
+              binary=kac.exe
+            fi
+            archive="$name.$extension"
+            mkdir -p "$name"
+            if ! awk -v archive="$archive" '$2 == archive { print }' checksums.txt | sha256sum -c > "$name/checksum.txt" 2>&1; then
+              printf -- '- %s: checksum verification failed\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if [[ "$os" == Windows ]]; then
+              if ! unzip -p "$archive" "$binary" > "$name/$binary"; then
+                printf -- '- %s: extraction failed\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+                failed=1
+                continue
+              fi
+            else
+              if ! tar -xOzf "$archive" "$binary" > "$name/$binary"; then
+                printf -- '- %s: extraction failed\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+                failed=1
+                continue
+              fi
+            fi
+            if ! go version -m -json "$name/$binary" > "$name/build-metadata.json" ||
+               ! jq -e '.GoVersion | strings | startswith("go1.")' "$name/build-metadata.json" > /dev/null; then
+              printf -- '- %s: Go build metadata unavailable\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if govulncheck -mode=binary "$name/$binary" > "$name/govulncheck.txt" 2>&1; then
+              printf -- '- %s: scan passed\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf -- '- %s: scan failed; inspect the scan report\n' "$target" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+            cat "$name/govulncheck.txt"
+          done
+          exit "$failed"
+      - name: Retain scan evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/release-audit/release.json
+            ${{ runner.temp }}/release-audit/checksums.txt
+            ${{ runner.temp }}/release-audit/*/checksum.txt
+            ${{ runner.temp }}/release-audit/*/build-metadata.json
+            ${{ runner.temp }}/release-audit/*/govulncheck.txt
+          if-no-files-found: warn
+          retention-days: 30
