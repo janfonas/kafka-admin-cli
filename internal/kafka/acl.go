@@ -20,15 +20,15 @@ func (c *Client) CreateAcl(ctx context.Context, resourceType, resourceName, prin
 	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
-	resourceTypeInt, err := strconv.Atoi(resourceType)
+	resourceTypeInt, err := strconv.ParseInt(resourceType, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid resource type: %w", err)
 	}
-	operationInt, err := strconv.Atoi(operation)
+	operationInt, err := strconv.ParseInt(operation, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid operation: %w", err)
 	}
-	permissionInt, err := strconv.Atoi(permission)
+	permissionInt, err := strconv.ParseInt(permission, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid permission: %w", err)
 	}
@@ -56,15 +56,15 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
-	resourceTypeInt, err := strconv.Atoi(resourceType)
+	resourceTypeInt, err := strconv.ParseInt(resourceType, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid resource type: %w", err)
 	}
-	operationInt, err := strconv.Atoi(operation)
+	operationInt, err := strconv.ParseInt(operation, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid operation: %w", err)
 	}
-	permissionInt, err := strconv.Atoi(permission)
+	permissionInt, err := strconv.ParseInt(permission, 10, 8)
 	if err != nil {
 		return fmt.Errorf("invalid permission: %w", err)
 	}
@@ -93,6 +93,10 @@ func (c *Client) DeleteAcl(ctx context.Context, resourceType, resourceName, prin
 // with the updated permission. This is used to change the permission type (allow/deny)
 // while keeping all other ACL parameters the same.
 func (c *Client) ModifyAcl(ctx context.Context, resourceType, resourceName, principal, host, operation, permission string, newPermission string) error {
+	if _, err := strconv.ParseInt(newPermission, 10, 8); err != nil {
+		return fmt.Errorf("invalid new permission: %w", err)
+	}
+
 	// First delete the existing ACL
 	err := c.DeleteAcl(ctx, resourceType, resourceName, principal, host, operation, permission)
 	if err != nil {
@@ -118,17 +122,6 @@ func (c *Client) describeACLs(ctx context.Context, operation, resourceType, reso
 	ctx, cancel := context.WithTimeout(ctx, ACLRequestTimeout)
 	defer cancel()
 
-	// Strimzi clusters without an authorizer configured do not advertise DescribeACLs (key 29).
-	supported, _, err := c.CheckAPISupport(ctx, 29)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check ACL API support: %w", err)
-	}
-	if !supported {
-		return nil, fmt.Errorf("broker does not support the DescribeACLs API (key 29). " +
-			"This typically means no ACL authorizer is configured on the Kafka cluster. " +
-			"For Strimzi, set 'authorization' in the Kafka custom resource (e.g., type: simple)")
-	}
-
 	// Unset filters must be ANY; the zero value means UNKNOWN, which brokers reject.
 	req := kmsg.NewPtrDescribeACLsRequest()
 	req.ResourceType = kmsg.ACLResourceTypeAny
@@ -137,7 +130,7 @@ func (c *Client) describeACLs(ctx context.Context, operation, resourceType, reso
 	req.PermissionType = kmsg.ACLPermissionTypeAny
 
 	if resourceType != "" {
-		resourceTypeInt, err := strconv.Atoi(resourceType)
+		resourceTypeInt, err := strconv.ParseInt(resourceType, 10, 8)
 		if err != nil {
 			return nil, fmt.Errorf("invalid resource type: %w", err)
 		}
@@ -148,6 +141,17 @@ func (c *Client) describeACLs(ctx context.Context, operation, resourceType, reso
 	}
 	if principal != "" {
 		req.Principal = &principal
+	}
+
+	// Strimzi clusters without an authorizer configured do not advertise DescribeACLs (key 29).
+	supported, _, err := c.CheckAPISupport(ctx, 29)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ACL API support: %w", err)
+	}
+	if !supported {
+		return nil, fmt.Errorf("broker does not support the DescribeACLs API (key 29). " +
+			"This typically means no ACL authorizer is configured on the Kafka cluster. " +
+			"For Strimzi, set 'authorization' in the Kafka custom resource (e.g., type: simple)")
 	}
 
 	resp, err := req.RequestWith(ctx, c.client)

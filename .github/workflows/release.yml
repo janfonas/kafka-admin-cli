@@ -36,7 +36,7 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de
         with:
           distribution: goreleaser
           version: 'v2.20.0'

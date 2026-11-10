@@ -3,12 +3,103 @@ package kafka
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
+
+type aclRequestRecorder struct {
+	kafkaClient
+	requests []kmsg.Request
+}
+
+func (recorder *aclRequestRecorder) Request(ctx context.Context, request kmsg.Request) (kmsg.Response, error) {
+	recorder.requests = append(recorder.requests, request)
+	return recorder.kafkaClient.Request(ctx, request)
+}
+
+func TestACLRejectsInvalidNumericInput(t *testing.T) {
+	for _, operation := range []struct {
+		name string
+		call func(*Client, string) error
+	}{
+		{"create resource", func(client *Client, value string) error {
+			return client.CreateAcl(context.Background(), value, "orders", "User:alice", "*", "3", "3")
+		}},
+		{"create operation", func(client *Client, value string) error {
+			return client.CreateAcl(context.Background(), "2", "orders", "User:alice", "*", value, "3")
+		}},
+		{"create permission", func(client *Client, value string) error {
+			return client.CreateAcl(context.Background(), "2", "orders", "User:alice", "*", "3", value)
+		}},
+		{"delete resource", func(client *Client, value string) error {
+			return client.DeleteAcl(context.Background(), value, "orders", "User:alice", "*", "3", "3")
+		}},
+		{"delete operation", func(client *Client, value string) error {
+			return client.DeleteAcl(context.Background(), "2", "orders", "User:alice", "*", value, "3")
+		}},
+		{"delete permission", func(client *Client, value string) error {
+			return client.DeleteAcl(context.Background(), "2", "orders", "User:alice", "*", "3", value)
+		}},
+		{"describe resource", func(client *Client, value string) error {
+			_, err := client.DescribeAcls(context.Background(), value, "orders", "User:alice")
+			return err
+		}},
+		{"modify replacement permission", func(client *Client, value string) error {
+			return client.ModifyAcl(context.Background(), "2", "orders", "User:alice", "*", "3", "3", value)
+		}},
+	} {
+		for _, value := range []string{"-129", "128", "257", "258", "259", "-255", "-254", "-253", "2147483648", "9223372036854775808", "invalid"} {
+			t.Run(operation.name+"/"+value, func(t *testing.T) {
+				recorder := &aclRequestRecorder{kafkaClient: newMockClient(
+					&kmsg.CreateACLsResponse{}, &kmsg.DeleteACLsResponse{}, &kmsg.DescribeACLsResponse{},
+				)}
+				if err := operation.call(NewClientWithMock(recorder), value); err == nil {
+					t.Errorf("accepted invalid numeric input %q", value)
+				}
+				if len(recorder.requests) != 0 {
+					t.Errorf("invalid input sent %d broker requests", len(recorder.requests))
+				}
+			})
+		}
+	}
+}
+
+func TestACLNumericInputPreservesWireValues(t *testing.T) {
+	for _, value := range []int8{-128, 1, 2, 3, 127} {
+		input := strconv.FormatInt(int64(value), 10)
+		t.Run(input, func(t *testing.T) {
+			recorder := &aclRequestRecorder{kafkaClient: newMockClient(
+				&kmsg.CreateACLsResponse{}, &kmsg.DeleteACLsResponse{}, &kmsg.DescribeACLsResponse{},
+			)}
+			client := NewClientWithMock(recorder)
+			if err := client.CreateAcl(context.Background(), input, "orders", "User:alice", "*", input, input); err != nil {
+				t.Fatal(err)
+			}
+			creation := recorder.requests[0].(*kmsg.CreateACLsRequest).Creations[0]
+			if int8(creation.ResourceType) != value || int8(creation.Operation) != value || int8(creation.PermissionType) != value {
+				t.Fatalf("create changed numeric value %d: %+v", value, creation)
+			}
+			if err := client.DeleteAcl(context.Background(), input, "orders", "User:alice", "*", input, input); err != nil {
+				t.Fatal(err)
+			}
+			filter := recorder.requests[1].(*kmsg.DeleteACLsRequest).Filters[0]
+			if int8(filter.ResourceType) != value || int8(filter.Operation) != value || int8(filter.PermissionType) != value {
+				t.Fatalf("delete changed numeric value %d: %+v", value, filter)
+			}
+			if _, err := client.DescribeAcls(context.Background(), input, "orders", "User:alice"); err != nil {
+				t.Fatal(err)
+			}
+			request := recorder.requests[len(recorder.requests)-1].(*kmsg.DescribeACLsRequest)
+			if int8(request.ResourceType) != value {
+				t.Fatalf("describe changed numeric value %d: %+v", value, request)
+			}
+		})
+	}
+}
 
 func TestACLErrorHandling(t *testing.T) {
 	tests := []struct {

@@ -135,6 +135,10 @@ func TestExportACLJSONFailuresWriteNothing(t *testing.T) {
 		{"broker error", "", &fakeACLSource{err: errors.New("describe failed")}},
 		{"invalid filter", "topic", &fakeACLSource{}},
 		{"unknown filter value", "99", &fakeACLSource{}},
+		{"positive wrapped ANY", "257", &fakeACLSource{}},
+		{"positive wrapped TOPIC", "258", &fakeACLSource{}},
+		{"negative wrapped ANY", "-255", &fakeACLSource{}},
+		{"negative wrapped TOPIC", "-254", &fakeACLSource{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
@@ -143,6 +147,9 @@ func TestExportACLJSONFailuresWriteNothing(t *testing.T) {
 			}
 			if out.Len() != 0 {
 				t.Fatalf("failed export wrote output: %s", out.String())
+			}
+			if tt.resourceType != "" && tt.source.gotFilter != [3]string{} {
+				t.Fatalf("invalid filter reached broker: %v", tt.source.gotFilter)
 			}
 		})
 	}

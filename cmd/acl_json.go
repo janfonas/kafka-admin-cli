@@ -74,7 +74,7 @@ func exportACLJSON(ctx context.Context, w io.Writer, source aclExportSource, res
 func newACLExportFilter(resourceType, resourceName, principal string) (aclExportFilter, error) {
 	filter := aclExportFilter{ResourceName: resourceName, Principal: principal}
 	if resourceType != "" {
-		value, err := strconv.Atoi(resourceType)
+		value, err := strconv.ParseInt(resourceType, 10, 8)
 		if err != nil {
 			return aclExportFilter{}, fmt.Errorf("invalid resource type: %w", err)
 		}
