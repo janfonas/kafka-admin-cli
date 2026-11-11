@@ -36,7 +36,7 @@ sudo mv kac /usr/local/bin/
 > `sudo mv kafka-admin-cli /usr/local/bin/kac`.
 
 #### Build from Source
-The current source requires Go 1.26.10 or newer. Release builds use Go 1.27.3.
+The current source requires Go 1.26.11 or newer. Release builds use Go 1.27.4.
 
 ```bash
 # Using go install
@@ -512,9 +512,9 @@ The build script (`build.sh`) provides:
 - Tests before compilation (unless `-skip-tests` is specified)
 - Immediate failure if dependency validation, tests, or compilation fails
 
-CI runs race-enabled tests, `go vet`, and `govulncheck` on Go 1.26.10 and 1.27.3.
+CI runs race-enabled tests, `go vet`, and `govulncheck` on Go 1.26.11 and 1.27.4.
 It also builds all six release targets (Linux, macOS, and Windows on amd64 and
-arm64) using Go 1.27.3 with CGO disabled and scans every resulting binary.
+arm64) using Go 1.27.4 with CGO disabled and scans every resulting binary.
 Tag-triggered publishing requires these checks to pass and scans the actual
 release binaries again before publishing.
 
@@ -549,7 +549,7 @@ or automatic keep-alive commits are configured.
 
 ### Local Release Validation
 
-To validate a release locally without publishing, use Go 1.27.3 and GoReleaser
+To validate a release locally without publishing, use Go 1.27.4 and GoReleaser
 v2.20.0, with `govulncheck` on your `PATH`:
 
 ```bash
